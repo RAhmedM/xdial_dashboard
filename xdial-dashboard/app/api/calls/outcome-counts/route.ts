@@ -1,0 +1,108 @@
+// app/api/calls/outcome-counts/route.ts
+import { NextRequest, NextResponse } from 'next/server'
+import { Pool } from 'pg'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+})
+
+export async function GET(request: NextRequest) {
+  try {
+    const { searchParams } = new URL(request.url)
+    const clientId = searchParams.get('client_id')
+    const startDate = searchParams.get('start_date')
+    const endDate = searchParams.get('end_date')
+    const search = searchParams.get('search')
+
+    console.log('Outcome counts filters:', { clientId, startDate, endDate, search })
+
+    // Build WHERE conditions (same as calls API but without outcome filtering)
+    const conditions: string[] = []
+    const params: any[] = []
+
+    if (clientId) {
+      conditions.push(`c.client_id = $${params.length + 1}`)
+      params.push(clientId)
+    }
+
+    if (startDate) {
+      conditions.push(`c.timestamp >= $${params.length + 1}::timestamp`)
+      params.push(startDate)
+    }
+
+    if (endDate) {
+      conditions.push(`c.timestamp <= $${params.length + 1}::timestamp`)
+      params.push(endDate)
+    }
+
+    if (search) {
+      conditions.push(`c.phone_number ILIKE $${params.length + 1}`)
+      params.push(`%${search}%`)
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+
+    // Get counts for each outcome category
+    const query = `
+      SELECT 
+        response_category,
+        COUNT(*) as count
+      FROM calls c
+      ${whereClause}
+      GROUP BY response_category
+      ORDER BY count DESC
+    `
+
+    console.log('Outcome counts query:', query)
+    console.log('Outcome counts params:', params)
+
+    const result = await pool.query(query, params)
+
+    // Map database categories to filter categories
+    const categoryMapping: { [key: string]: string } = {
+      'ANSWER_MACHINE_hello': 'answering-machine',
+      'ANSWER MACHINE_hello': 'answering-machine',
+      'INTERESTED_hello': 'interested',
+      'INTERESTED hello': 'interested',
+      'Not_Responding_hello': 'not-interested',
+      'NOT_INTERESTED_hello': 'not-interested',
+      'DO_NOT_CALL_hello': 'do-not-call',
+      'DO_NOT_QUALIFY_hello': 'do-not-qualify',
+      'UNKNOWN_hello': 'unknown',
+      'UNKNOWN_greeting': 'unknown',
+      'UNKNOWN hello': 'unknown',
+      'USER_SILENT_hello': 'user-silent',
+      'User Silent_hello': 'user-silent'
+    }
+
+    // Aggregate counts by filter category
+    const outcomeCounts: { [key: string]: number } = {
+      'answering-machine': 0,
+      'interested': 0,
+      'not-interested': 0,
+      'do-not-call': 0,
+      'do-not-qualify': 0,
+      'unknown': 0
+    }
+
+    result.rows.forEach(row => {
+      const filterCategory = categoryMapping[row.response_category]
+      if (filterCategory && outcomeCounts.hasOwnProperty(filterCategory)) {
+        outcomeCounts[filterCategory] += parseInt(row.count)
+      } else {
+        // If category doesn't match our mapping, add to unknown
+        outcomeCounts['unknown'] += parseInt(row.count)
+      }
+    })
+
+    console.log('Outcome counts result:', outcomeCounts)
+
+    return NextResponse.json(outcomeCounts)
+  } catch (error) {
+    console.error('Error fetching outcome counts:', error)
+    return NextResponse.json({ 
+      error: 'Failed to fetch outcome counts',
+      details: error.message 
+    }, { status: 500 })
+  }
+}
