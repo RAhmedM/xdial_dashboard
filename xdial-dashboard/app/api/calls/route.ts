@@ -48,15 +48,15 @@ export async function GET(request: NextRequest) {
     // Handle multiple response categories (from outcomes filter)
     if (responseCategories.length > 0) {
       // Map filter IDs to actual database values
-      const categoryMapping: { [key: string]: string[] } = {
-        'answering-machine': ['ANSWER_MACHINE_hello', 'ANSWER MACHINE_hello'],
-        'interested': ['INTERESTED_hello', 'INTERESTED hello'],
-        'not-interested': ['Not_Responding_hello', 'NOT_INTERESTED_hello'],
-        'do-not-call': ['DO_NOT_CALL_hello'],
-        'do-not-qualify': ['DO_NOT_QUALIFY_hello'],
-        'unknown': ['UNKNOWN_hello', 'UNKNOWN_greeting', 'UNKNOWN hello'],
-        'user-silent': ['USER_SILENT_hello', 'User Silent_hello']
-      }
+      // Map filter IDs to actual database values
+const categoryMapping: { [key: string]: string[] } = {
+  'answering-machine': ['Answering_Machine'],
+  'interested': ['Interested'],
+  'not-interested': ['Not_Interested'],
+  'do-not-call': ['DNC'],
+  'do-not-qualify': ['DNQ'],
+  'unknown': ['Unknown']
+}
 
       const dbCategories: string[] = []
       responseCategories.forEach(category => {
