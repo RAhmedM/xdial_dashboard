@@ -1,4 +1,13 @@
-// components/debug-filter.tsx - Temporary component for debugging
+<div className="border-t border-yellow-300 pt-2 mt-3">
+          <strong>Quick Test Cases (What should happen):</strong>
+          <div className="ml-2 space-y-1 text-xs">
+            <div><strong>Pakistan 13:00 →</strong> Should be 08:00 UTC (13:00 - 5 hours)</div>
+            <div><strong>USA Eastern 13:00 →</strong> Should be 17:00 UTC (13:00 + 4 hours for EDT)</div>
+            <div className="mt-2"><strong>Current Results:</strong></div>
+            <div><strong>Pakistan 13:00 →</strong> {selectedTimezone === 'PAKISTAN' ? formatDateForAPI('2025-08-21', '13:00', false) : 'Switch to Pakistan to test'}</div>
+            <div><strong>USA 13:00 →</strong> {selectedTimezone === 'USA' ? formatDateForAPI('2025-08-21', '13:00', false) : 'Switch to USA to test'}</div>
+          </div>
+        </div>// components/debug-filter.tsx - Temporary component for debugging
 // Save this file as: components/debug-filter.tsx
 "use client"
 

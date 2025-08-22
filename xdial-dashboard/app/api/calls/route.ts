@@ -48,15 +48,15 @@ export async function GET(request: NextRequest) {
     // Handle multiple response categories (from outcomes filter)
     if (responseCategories.length > 0) {
       // Map filter IDs to actual database values
-      // Map filter IDs to actual database values
-const categoryMapping: { [key: string]: string[] } = {
-  'answering-machine': ['Answering_Machine'],
-  'interested': ['Interested'],
-  'not-interested': ['Not_Interested'],
-  'do-not-call': ['DNC'],
-  'do-not-qualify': ['DNQ'],
-  'unknown': ['Unknown']
-}
+      const categoryMapping: { [key: string]: string[] } = {
+        'answering-machine': ['ANSWER_MACHINE_hello', 'ANSWER MACHINE_hello'],
+        'interested': ['INTERESTED_hello', 'INTERESTED hello'],
+        'not-interested': ['Not_Responding_hello', 'NOT_INTERESTED_hello'],
+        'do-not-call': ['DO_NOT_CALL_hello'],
+        'do-not-qualify': ['DO_NOT_QUALIFY_hello'],
+        'unknown': ['UNKNOWN_hello', 'UNKNOWN_greeting', 'UNKNOWN hello'],
+        'user-silent': ['USER_SILENT_hello', 'User Silent_hello']
+      }
 
       const dbCategories: string[] = []
       responseCategories.forEach(category => {
@@ -72,21 +72,21 @@ const categoryMapping: { [key: string]: string[] } = {
       }
     }
 
-    // Handle date filtering with proper timezone handling
+    // Handle date filtering - dates from frontend are already converted to US timezone
     if (startDate) {
-      // Convert ISO string to PostgreSQL timestamp
+      // Convert ISO string to timestamp for comparison with database (which stores US timezone)
       const startDateObj = new Date(startDate)
-      conditions.push(`c.timestamp >= $${params.length + 1}`)
+      conditions.push(`c.timestamp >= ${params.length + 1}`)
       params.push(startDateObj.toISOString())
-      console.log('Added start date filter:', startDateObj.toISOString())
+      console.log('Added start date filter (US timezone):', startDateObj.toISOString())
     }
 
     if (endDate) {
-      // Convert ISO string to PostgreSQL timestamp
+      // Convert ISO string to timestamp for comparison with database (which stores US timezone)  
       const endDateObj = new Date(endDate)
-      conditions.push(`c.timestamp <= $${params.length + 1}`)
+      conditions.push(`c.timestamp <= ${params.length + 1}`)
       params.push(endDateObj.toISOString())
-      console.log('Added end date filter:', endDateObj.toISOString())
+      console.log('Added end date filter (US timezone):', endDateObj.toISOString())
     }
 
     if (search) {
@@ -118,7 +118,7 @@ const categoryMapping: { [key: string]: string[] } = {
         c.client_id,
         c.phone_number,
         c.response_category,
-        c.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'UTC' as timestamp,
+        c.timestamp,
         c.recording_url,
         c.recording_length,
         COALESCE(cl.client_name, 'Unknown Client') as client_name
@@ -126,7 +126,7 @@ const categoryMapping: { [key: string]: string[] } = {
       LEFT JOIN clients cl ON c.client_id = cl.client_id 
       ${whereClause}
       ORDER BY c.timestamp DESC
-      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+      LIMIT ${params.length + 1} OFFSET ${params.length + 2}
     `
 
     const dataParams = [...params, limit, offset]

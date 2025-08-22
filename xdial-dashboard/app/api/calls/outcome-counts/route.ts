@@ -25,21 +25,21 @@ export async function GET(request: NextRequest) {
       params.push(clientId)
     }
 
-    // Handle date filtering with proper timezone handling
+    // Handle date filtering - dates from frontend are already converted to US timezone
     if (startDate) {
-      // Convert ISO string to PostgreSQL timestamp
+      // Convert ISO string to timestamp for comparison with database (which stores US timezone)
       const startDateObj = new Date(startDate)
-      conditions.push(`c.timestamp >= $${params.length + 1}`)
+      conditions.push(`c.timestamp >= ${params.length + 1}`)
       params.push(startDateObj.toISOString())
-      console.log('Outcome counts: Added start date filter:', startDateObj.toISOString())
+      console.log('Outcome counts: Added start date filter (US timezone):', startDateObj.toISOString())
     }
 
     if (endDate) {
-      // Convert ISO string to PostgreSQL timestamp
+      // Convert ISO string to timestamp for comparison with database (which stores US timezone)
       const endDateObj = new Date(endDate)
-      conditions.push(`c.timestamp <= $${params.length + 1}`)
+      conditions.push(`c.timestamp <= ${params.length + 1}`)
       params.push(endDateObj.toISOString())
-      console.log('Outcome counts: Added end date filter:', endDateObj.toISOString())
+      console.log('Outcome counts: Added end date filter (US timezone):', endDateObj.toISOString())
     }
 
     if (search) {
@@ -66,15 +66,21 @@ export async function GET(request: NextRequest) {
     const result = await pool.query(query, params)
 
     // Map database categories to filter categories
-    // Map database categories to filter categories
-const categoryMapping: { [key: string]: string } = {
-  'Answering_Machine': 'answering-machine',
-  'Interested': 'interested',
-  'Not_Interested': 'not-interested',
-  'DNC': 'do-not-call',
-  'DNQ': 'do-not-qualify',
-  'Unknown': 'unknown'
-}
+    const categoryMapping: { [key: string]: string } = {
+      'ANSWER_MACHINE_hello': 'answering-machine',
+      'ANSWER MACHINE_hello': 'answering-machine',
+      'INTERESTED_hello': 'interested',
+      'INTERESTED hello': 'interested',
+      'Not_Responding_hello': 'not-interested',
+      'NOT_INTERESTED_hello': 'not-interested',
+      'DO_NOT_CALL_hello': 'do-not-call',
+      'DO_NOT_QUALIFY_hello': 'do-not-qualify',
+      'UNKNOWN_hello': 'unknown',
+      'UNKNOWN_greeting': 'unknown',
+      'UNKNOWN hello': 'unknown',
+      'USER_SILENT_hello': 'user-silent',
+      'User Silent_hello': 'user-silent'
+    }
 
     // Aggregate counts by filter category
     const outcomeCounts: { [key: string]: number } = {

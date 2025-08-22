@@ -25,21 +25,21 @@ export async function GET(request: NextRequest) {
       params.push(clientId)
     }
 
-    // Handle date filtering with proper timezone handling
+    // Handle date filtering - dates from frontend are already converted to US timezone
     if (startDate) {
-      // Convert ISO string to PostgreSQL timestamp
+      // Convert ISO string to timestamp for comparison with database (which stores US timezone)
       const startDateObj = new Date(startDate)
-      conditions.push(`timestamp >= $${params.length + 1}`)
+      conditions.push(`timestamp >= ${params.length + 1}`)
       params.push(startDateObj.toISOString())
-      console.log('Stats: Added start date filter:', startDateObj.toISOString())
+      console.log('Stats: Added start date filter (US timezone):', startDateObj.toISOString())
     }
 
     if (endDate) {
-      // Convert ISO string to PostgreSQL timestamp
+      // Convert ISO string to timestamp for comparison with database (which stores US timezone)
       const endDateObj = new Date(endDate)
-      conditions.push(`timestamp <= $${params.length + 1}`)
+      conditions.push(`timestamp <= ${params.length + 1}`)
       params.push(endDateObj.toISOString())
-      console.log('Stats: Added end date filter:', endDateObj.toISOString())
+      console.log('Stats: Added end date filter (US timezone):', endDateObj.toISOString())
     }
 
     if (search) {

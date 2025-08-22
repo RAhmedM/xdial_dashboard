@@ -164,75 +164,136 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // Helper function to format date for API (converts to US timezone since server data is in US time)
+  // Helper function to format date for API (converts to US timezone since database stores US time)
   const formatDateForAPI = (dateString: string, timeString: string = "", isEndDate = false) => {
     if (!dateString) return null
     
-    // Parse the date string
+    // Parse inputs
     const [year, month, day] = dateString.split('-').map(Number)
+    let hours = 0, minutes = 0
     
-    // Determine the time to use
-    let hours = 0, minutes = 0, seconds = 0, milliseconds = 0
     if (timeString) {
       [hours, minutes] = timeString.split(':').map(Number)
     } else {
       if (isEndDate) {
         hours = 23
         minutes = 59
-        seconds = 59
-        milliseconds = 999
       }
     }
     
     if (selectedTimezone === 'PAKISTAN') {
-      // User selected Pakistan timezone - convert Pakistan time to US time for API
-      // Create a date as if it's in Pakistan, then convert to US
+      // User input is Pakistan time - convert to US time for database query
+      // Pakistan is typically 9-10 hours ahead of US Eastern
       
-      // First, create the date/time combination
-      const dateTimeString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`
+      // Determine if US is in DST (EDT) or Standard Time (EST)
+      const testDate = new Date(year, month - 1, day)
+      const isDST = testDate.getMonth() >= 2 && testDate.getMonth() <= 10 // March to November
+      const hoursOffset = isDST ? 9 : 10 // Pakistan is 9 hours ahead during EDT, 10 hours during EST
       
-      // Parse this as if it's in Pakistan timezone
-      const pakistanDate = new Date(dateTimeString + '+05:00') // Pakistan is UTC+5
+      // Convert Pakistan time to US time
+      const pakistanDateTime = new Date(year, month - 1, day, hours, minutes, isEndDate ? 59 : 0)
+      const usDateTime = new Date(pakistanDateTime.getTime() - (hoursOffset * 60 * 60 * 1000))
       
-      // Return as ISO string (this will be in UTC, which the server can handle)
-      return pakistanDate.toISOString()
+      // Format as string that represents US time (what database expects)
+      return usDateTime.toISOString()
       
     } else {
-      // User selected US timezone - create date directly for US timezone
-      // Since server expects US time, we can create this more directly
-      const date = new Date(year, month - 1, day, hours, minutes, seconds, milliseconds)
-      return date.toISOString()
+      // User input is US time - send directly since database stores US time
+      const usDateTime = new Date(year, month - 1, day, hours, minutes, isEndDate ? 59 : 0)
+      return usDateTime.toISOString()
     }
   }
 
   // Helper function to format timestamp for display in selected timezone
   const formatTimestampForDisplay = (timestamp: string) => {
-    const date = new Date(timestamp)
+    // Database timestamp is in US timezone
+    const usDate = new Date(timestamp)
     
-    return date.toLocaleString('en-US', {
-      timeZone: TIMEZONES[selectedTimezone],
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    })
+    if (selectedTimezone === 'PAKISTAN') {
+      // Convert US time to Pakistan time for display
+      // Pakistan is typically 9-10 hours ahead of US Eastern
+      
+      // Determine if US is in DST at the time of this timestamp
+      const isDST = usDate.getMonth() >= 2 && usDate.getMonth() <= 10 // March to November
+      const hoursOffset = isDST ? 9 : 10 // Pakistan is 9 hours ahead during EDT, 10 hours during EST
+      
+      // Add the offset to get Pakistan time
+      const pakistanDate = new Date(usDate.getTime() + (hoursOffset * 60 * 60 * 1000))
+      
+      return pakistanDate.toLocaleString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      }) + ' PKT'
+      
+    } else {
+      // Display US time as-is (since database stores US time)
+      return usDate.toLocaleString('en-US', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      }) + ' EST/EDT'
+    }
   }
 
   // Helper function to get current time in selected timezone
   const getCurrentTimeInTimezone = () => {
-    return new Date().toLocaleString('en-US', {
-      timeZone: TIMEZONES[selectedTimezone],
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZoneName: 'short'
-    })
+    const now = new Date()
+    
+    if (selectedTimezone === 'PAKISTAN') {
+      // Show Pakistan time
+      const pakistanTime = now.toLocaleString('en-US', {
+        timeZone: 'Asia/Karachi',
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short'
+      })
+      
+      // Also show corresponding US time for reference
+      const usTime = now.toLocaleString('en-US', {
+        timeZone: 'America/New_York',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short'
+      })
+      
+      return `${pakistanTime} (US Eastern: ${usTime})`
+      
+    } else {
+      // Show US time
+      const usTime = now.toLocaleString('en-US', {
+        timeZone: 'America/New_York',
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short'
+      })
+      
+      // Also show corresponding Pakistan time for reference
+      const pakistanTime = now.toLocaleString('en-US', {
+        timeZone: 'Asia/Karachi',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short'
+      })
+      
+      return `${usTime} (Pakistan: ${pakistanTime})`
+    }
   }
 
   // Helper function to build API params
@@ -520,7 +581,9 @@ export default function DashboardPage() {
                 <strong>Current Time ({selectedTimezone === 'USA' ? 'US Eastern' : 'Pakistan'}):</strong> {getCurrentTimeInTimezone()}
               </div>
               <div className="text-xs text-gray-500 mt-1">
-                Server data is stored in US timezone. Timestamps will be displayed in your selected timezone.
+                Database stores timestamps in US timezone. {selectedTimezone === 'PAKISTAN' 
+                  ? 'Your Pakistan time inputs are converted to US time for database queries, and results are converted back to Pakistan time for display.' 
+                  : 'Your US time inputs match the database timezone directly.'}
               </div>
             </div>
 
@@ -593,7 +656,7 @@ export default function DashboardPage() {
               {(filters.startDate || filters.endDate || filters.startTime || filters.endTime) && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <div className="text-sm text-blue-900">
-                    <strong>Date Filter ({selectedTimezone === 'USA' ? 'US Eastern' : 'Pakistan Time'}):</strong>
+                    <strong>Date Filter ({selectedTimezone === 'USA' ? 'US Eastern' : 'Pakistan'} Time):</strong>
                     {filters.startDate && ` From ${new Date(filters.startDate).toLocaleDateString()}`}
                     {filters.startTime && ` at ${filters.startTime}`}
                     {filters.endDate && ` To ${new Date(filters.endDate).toLocaleDateString()}`}
@@ -602,7 +665,10 @@ export default function DashboardPage() {
                     {filters.startDate && !filters.endDate && ` From ${new Date(filters.startDate).toLocaleDateString()} onwards`}
                   </div>
                   <div className="text-xs text-blue-700 mt-1">
-                    Filtering server data (US timezone) based on {selectedTimezone === 'USA' ? 'US Eastern' : 'Pakistan'} time selection
+                    {selectedTimezone === 'PAKISTAN' 
+                      ? 'Pakistan time inputs are converted to US time for database queries (database stores US timezone)'
+                      : 'US time inputs match database timezone directly (no conversion needed)'
+                    }
                   </div>
                 </div>
               )}
