@@ -49,13 +49,12 @@ export async function GET(request: NextRequest) {
     if (responseCategories.length > 0) {
       // Map filter IDs to actual database values
       const categoryMapping: { [key: string]: string[] } = {
-        'answering-machine': ['ANSWER_MACHINE_hello', 'ANSWER MACHINE_hello'],
-        'interested': ['INTERESTED_hello', 'INTERESTED hello'],
-        'not-interested': ['Not_Responding_hello', 'NOT_INTERESTED_hello'],
-        'do-not-call': ['DO_NOT_CALL_hello'],
-        'do-not-qualify': ['DO_NOT_QUALIFY_hello'],
-        'unknown': ['UNKNOWN_hello', 'UNKNOWN_greeting', 'UNKNOWN hello'],
-        'user-silent': ['USER_SILENT_hello', 'User Silent_hello']
+        'answering-machine': ['Answering_Machine'],
+        'interested': ['Interested'],
+        'not-interested': ['Not_Interested'],
+        'do-not-call': ['DNC'],
+        'do-not-qualify': ['DNQ'],
+        'unknown': ['Unknown']
       }
 
       const dbCategories: string[] = []
@@ -100,10 +99,10 @@ export async function GET(request: NextRequest) {
       LEFT JOIN clients cl ON c.client_id = cl.client_id 
       ${whereClause}
     `
-    
+
     console.log('Count Query:', countQuery)
     console.log('Count Params:', params)
-    
+
     const countResult = await pool.query(countQuery, params)
     const total = parseInt(countResult.rows[0].total)
 
@@ -126,7 +125,7 @@ export async function GET(request: NextRequest) {
     `
 
     const dataParams = [...params, limit, offset]
-    
+
     console.log('Data Query:', dataQuery)
     console.log('Data Params:', dataParams)
 
@@ -153,9 +152,9 @@ export async function GET(request: NextRequest) {
       message: error.message,
       stack: error.stack
     })
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Failed to fetch calls',
-      details: error.message 
+      details: error.message
     }, { status: 500 })
   }
 }

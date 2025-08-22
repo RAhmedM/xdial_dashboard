@@ -10,20 +10,20 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { 
-  Calendar, 
-  Clock, 
-  RotateCcw, 
-  Filter, 
-  Search, 
-  Play, 
-  ChevronLeft, 
-  ChevronRight, 
+import {
+  Calendar,
+  Clock,
+  RotateCcw,
+  Filter,
+  Search,
+  Play,
+  ChevronLeft,
+  ChevronRight,
   X,
-  Phone, 
-  Star, 
-  Ban, 
-  AlertTriangle, 
+  Phone,
+  Star,
+  Ban,
+  AlertTriangle,
   HelpCircle,
   PhoneForwarded,
   PhoneOff
@@ -32,8 +32,7 @@ import { useToast } from "@/hooks/use-toast"
 
 interface FilterState {
   search: string
-  startDate: string
-  endDate: string
+  date: string  // Changed from startDate to just date
   startTime: string
   endTime: string
   selectedOutcomes: string[]
@@ -111,8 +110,7 @@ const callOutcomes = [
 export default function DashboardPage() {
   const [filters, setFilters] = useState<FilterState>({
     search: "",
-    startDate: "",
-    endDate: "",
+    date: "",  // Changed from startDate to date
     startTime: "",
     endTime: "",
     selectedOutcomes: []
@@ -144,7 +142,7 @@ export default function DashboardPage() {
     if (typeof window !== 'undefined') {
       const storedUser = sessionStorage.getItem('user')
       const storedUserType = sessionStorage.getItem('userType')
-      
+
       if (storedUser) {
         setUser(JSON.parse(storedUser))
       }
@@ -162,17 +160,19 @@ export default function DashboardPage() {
       params.append('search', filters.search)
     }
 
-    // Add date/time filters
-    if (filters.startDate && filters.startTime) {
-      params.append('start_date', `${filters.startDate} ${filters.startTime}:00`)
-    } else if (filters.startDate) {
-      params.append('start_date', `${filters.startDate} 00:00:00`)
-    }
+    // Add date/time filters - single date with time range
+    if (filters.date) {
+      if (filters.startTime) {
+        params.append('start_date', `${filters.date} ${filters.startTime}:00`)
+      } else {
+        params.append('start_date', `${filters.date} 00:00:00`)
+      }
 
-    if (filters.endDate && filters.endTime) {
-      params.append('end_date', `${filters.endDate} ${filters.endTime}:59`)
-    } else if (filters.endDate) {
-      params.append('end_date', `${filters.endDate} 23:59:59`)
+      if (filters.endTime) {
+        params.append('end_date', `${filters.date} ${filters.endTime}:59`)
+      } else {
+        params.append('end_date', `${filters.date} 23:59:59`)
+      }
     }
 
     // Add outcome filters (only for calls, not for outcome counts)
@@ -201,7 +201,7 @@ export default function DashboardPage() {
 
       const response = await fetch(`/api/calls?${params}`)
       if (!response.ok) throw new Error('Failed to fetch calls')
-      
+
       const data = await response.json()
       setCalls(data.calls)
       setPagination(data.pagination)
@@ -226,7 +226,7 @@ export default function DashboardPage() {
 
       const response = await fetch(`/api/calls/stats?${params}`)
       if (!response.ok) throw new Error('Failed to fetch stats')
-      
+
       const data = await response.json()
       setStats(data)
     } catch (error) {
@@ -244,7 +244,7 @@ export default function DashboardPage() {
 
       const response = await fetch(`/api/calls/outcome-counts?${params}`)
       if (!response.ok) throw new Error('Failed to fetch outcome counts')
-      
+
       const data = await response.json()
       setOutcomeCounts(data)
     } catch (error) {
@@ -269,8 +269,7 @@ export default function DashboardPage() {
   const handleReset = () => {
     setFilters({
       search: "",
-      startDate: "",
-      endDate: "",
+      date: "",  // Changed from startDate/endDate
       startTime: "",
       endTime: "",
       selectedOutcomes: []
@@ -281,13 +280,13 @@ export default function DashboardPage() {
 
   const handleOutcomeChange = (outcomeId: string, checked: boolean) => {
     let updatedOutcomes: string[]
-    
+
     if (checked) {
       updatedOutcomes = [...filters.selectedOutcomes, outcomeId]
     } else {
       updatedOutcomes = filters.selectedOutcomes.filter((id) => id !== outcomeId)
     }
-    
+
     setFilters({
       ...filters,
       selectedOutcomes: updatedOutcomes
@@ -423,12 +422,12 @@ export default function DashboardPage() {
                 <div className="flex items-center gap-3">
                   <Calendar className="h-5 w-5 text-gray-500" />
                   <span className="text-sm font-medium text-gray-700">Date</span>
-                  <Input 
-                    type="date" 
+                  <Input
+                    type="date"
                     className="w-40"
-                    value={filters.startDate}
+                    value={filters.date}
                     onChange={(e) => {
-                      setFilters({ ...filters, startDate: e.target.value })
+                      setFilters({ ...filters, date: e.target.value })
                       setPagination(prev => ({ ...prev, page: 1 }))
                     }}
                   />
@@ -436,25 +435,27 @@ export default function DashboardPage() {
 
                 <div className="flex items-center gap-3">
                   <Clock className="h-5 w-5 text-gray-500" />
-                  <span className="text-sm font-medium text-gray-700">Time</span>
-                  <Input 
-                    type="time" 
+                  <span className="text-sm font-medium text-gray-700">Time Range</span>
+                  <Input
+                    type="time"
                     className="w-24"
                     value={filters.startTime}
                     onChange={(e) => {
                       setFilters({ ...filters, startTime: e.target.value })
                       setPagination(prev => ({ ...prev, page: 1 }))
                     }}
+                    placeholder="Start"
                   />
                   <span className="text-sm text-gray-500">to</span>
-                  <Input 
-                    type="time" 
+                  <Input
+                    type="time"
                     className="w-24"
                     value={filters.endTime}
                     onChange={(e) => {
                       setFilters({ ...filters, endTime: e.target.value })
                       setPagination(prev => ({ ...prev, page: 1 }))
                     }}
+                    placeholder="End"
                   />
                 </div>
 
@@ -463,12 +464,19 @@ export default function DashboardPage() {
                     <RotateCcw className="h-4 w-4 mr-2" />
                     Reset
                   </Button>
-                  <Button className="bg-blue-500 hover:bg-blue-600 text-white" size="sm">
-                    <Filter className="h-4 w-4 mr-2" />
-                    Apply Filters
-                  </Button>
                 </div>
               </div>
+
+              {/* Show current filter status */}
+              {(filters.date || filters.startTime || filters.endTime) && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <div className="text-sm text-blue-900">
+                    <strong>Date Filter:</strong>
+                    {filters.date && ` ${filters.date}`}
+                    {(filters.startTime || filters.endTime) && ` from ${filters.startTime || '00:00'} to ${filters.endTime || '23:59'}`}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -481,7 +489,7 @@ export default function DashboardPage() {
                   <p className="text-xs text-blue-700 mt-1">Extension: {user.extension}</p>
                 </div>
               )}
-              
+
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {statsCards.map((stat) => (
                   <Card key={stat.title} className="relative overflow-hidden">
@@ -509,7 +517,7 @@ export default function DashboardPage() {
                 ))}
               </div>
             </div>
-            
+
             {/* Call Records with Filters */}
             <div className="flex gap-6">
               <div className="flex-1 space-y-4">
@@ -519,9 +527,9 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="text-sm font-medium text-blue-900">Active Filters:</span>
                       {filters.selectedOutcomes.map((outcome) => (
-                        <Badge 
-                          key={outcome} 
-                          variant="secondary" 
+                        <Badge
+                          key={outcome}
+                          variant="secondary"
                           className="bg-blue-100 text-blue-800 hover:bg-blue-200 cursor-pointer"
                           onClick={() => handleRemoveFilter(outcome)}
                         >
@@ -529,9 +537,9 @@ export default function DashboardPage() {
                           <X className="h-3 w-3 ml-1" />
                         </Badge>
                       ))}
-                      <Button 
-                        variant="ghost" 
-                        size="sm" 
+                      <Button
+                        variant="ghost"
+                        size="sm"
                         className="text-blue-600 hover:text-blue-800 ml-2"
                         onClick={handleClearAllFilters}
                       >
@@ -549,8 +557,8 @@ export default function DashboardPage() {
                       <div className="flex items-center gap-4">
                         <div className="relative">
                           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                          <Input 
-                            placeholder="Search records..." 
+                          <Input
+                            placeholder="Search records..."
                             className="pl-10 w-64"
                             value={filters.search}
                             onChange={(e) => {
@@ -594,8 +602,8 @@ export default function DashboardPage() {
                                   </td>
                                   <td className="py-3 px-4 text-sm text-gray-600">{formatTimestamp(call.timestamp)}</td>
                                   <td className="py-3 px-4">
-                                    <Button 
-                                      variant="ghost" 
+                                    <Button
+                                      variant="ghost"
                                       size="sm"
                                       onClick={() => handlePlayRecording(call.recording_url)}
                                       disabled={!call.recording_url}
@@ -659,10 +667,10 @@ export default function DashboardPage() {
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-medium text-gray-700">Call Outcomes</CardTitle>
                   <div className="flex items-center space-x-2">
-                    <Checkbox 
-                      id="select-all" 
-                      checked={selectAll} 
-                      onCheckedChange={handleSelectAll} 
+                    <Checkbox
+                      id="select-all"
+                      checked={selectAll}
+                      onCheckedChange={handleSelectAll}
                     />
                     <label htmlFor="select-all" className="text-xs text-gray-600 cursor-pointer">
                       Select All
@@ -702,7 +710,7 @@ export default function DashboardPage() {
             </div>
           </div>
         </div>
-        
+
         <Toaster />
       </div>
     </AuthWrapper>

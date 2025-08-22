@@ -59,20 +59,14 @@ export async function GET(request: NextRequest) {
     const result = await pool.query(query, params)
 
     // Map database categories to filter categories
+    // Map database categories to filter categories
     const categoryMapping: { [key: string]: string } = {
-      'ANSWER_MACHINE_hello': 'answering-machine',
-      'ANSWER MACHINE_hello': 'answering-machine',
-      'INTERESTED_hello': 'interested',
-      'INTERESTED hello': 'interested',
-      'Not_Responding_hello': 'not-interested',
-      'NOT_INTERESTED_hello': 'not-interested',
-      'DO_NOT_CALL_hello': 'do-not-call',
-      'DO_NOT_QUALIFY_hello': 'do-not-qualify',
-      'UNKNOWN_hello': 'unknown',
-      'UNKNOWN_greeting': 'unknown',
-      'UNKNOWN hello': 'unknown',
-      'USER_SILENT_hello': 'user-silent',
-      'User Silent_hello': 'user-silent'
+      'Answering_Machine': 'answering-machine',
+      'Interested': 'interested',
+      'Not_Interested': 'not-interested',
+      'DNC': 'do-not-call',
+      'DNQ': 'do-not-qualify',
+      'Unknown': 'unknown'
     }
 
     // Aggregate counts by filter category
@@ -100,9 +94,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(outcomeCounts)
   } catch (error) {
     console.error('Error fetching outcome counts:', error)
-    return NextResponse.json({ 
+    return NextResponse.json({
       error: 'Failed to fetch outcome counts',
-      details: error.message 
+      details: error.message
     }, { status: 500 })
   }
 }
