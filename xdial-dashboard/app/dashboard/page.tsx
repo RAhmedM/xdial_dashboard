@@ -27,6 +27,7 @@ import {
   PhoneOff
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { DebugFilter } from "@/components/debug-filter"
 
 interface FilterState {
   search: string
@@ -485,6 +486,9 @@ export default function DashboardPage() {
               )}
             </div>
           </div>
+
+          {/* Debug Component - Remove this after fixing the issue */}
+          <DebugFilter filters={filters} />
 
           <div className="space-y-6 mt-6">
             {/* Stats Cards */}
