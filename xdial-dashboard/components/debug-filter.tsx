@@ -1,4 +1,5 @@
 // components/debug-filter.tsx - Temporary component for debugging
+// Save this file as: components/debug-filter.tsx
 "use client"
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -7,21 +8,29 @@ interface DebugFilterProps {
   filters: {
     startDate: string
     endDate: string
+    startTime: string
+    endTime: string
     search: string
     selectedOutcomes: string[]
   }
 }
 
 export function DebugFilter({ filters }: DebugFilterProps) {
-  const formatDateForAPI = (dateString: string, isEndDate = false) => {
+  const formatDateForAPI = (dateString: string, timeString: string = "", isEndDate = false) => {
     if (!dateString) return null
     
-    const date = new Date(dateString)
+    const [year, month, day] = dateString.split('-').map(Number)
+    const date = new Date(year, month - 1, day)
     
-    if (isEndDate) {
-      date.setHours(23, 59, 59, 999)
+    if (timeString) {
+      const [hours, minutes] = timeString.split(':').map(Number)
+      date.setHours(hours, minutes, 0, 0)
     } else {
-      date.setHours(0, 0, 0, 0)
+      if (isEndDate) {
+        date.setHours(23, 59, 59, 999)
+      } else {
+        date.setHours(0, 0, 0, 0)
+      }
     }
     
     return date.toISOString()
@@ -40,10 +49,16 @@ export function DebugFilter({ filters }: DebugFilterProps) {
           <strong>Raw End Date:</strong> {filters.endDate || 'Not set'}
         </div>
         <div>
-          <strong>Processed Start Date:</strong> {filters.startDate ? formatDateForAPI(filters.startDate, false) : 'Not set'}
+          <strong>Raw Start Time:</strong> {filters.startTime || 'Not set'}
         </div>
         <div>
-          <strong>Processed End Date:</strong> {filters.endDate ? formatDateForAPI(filters.endDate, true) : 'Not set'}
+          <strong>Raw End Time:</strong> {filters.endTime || 'Not set'}
+        </div>
+        <div>
+          <strong>Processed Start Date:</strong> {filters.startDate ? formatDateForAPI(filters.startDate, filters.startTime, false) : 'Not set'}
+        </div>
+        <div>
+          <strong>Processed End Date:</strong> {filters.endDate ? formatDateForAPI(filters.endDate, filters.endTime, true) : 'Not set'}
         </div>
         <div>
           <strong>Search:</strong> {filters.search || 'Not set'}

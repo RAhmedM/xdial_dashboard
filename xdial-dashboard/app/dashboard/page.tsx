@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Calendar,
   RotateCcw,
@@ -24,7 +25,8 @@ import {
   AlertTriangle,
   HelpCircle,
   PhoneForwarded,
-  PhoneOff
+  PhoneOff,
+  Globe
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { DebugFilter } from "@/components/debug-filter"
@@ -33,8 +35,18 @@ interface FilterState {
   search: string
   startDate: string
   endDate: string
+  startTime: string
+  endTime: string
   selectedOutcomes: string[]
 }
+
+// Timezone constants
+const TIMEZONES = {
+  PAKISTAN: 'Asia/Karachi',
+  USA: 'America/New_York'
+} as const
+
+type TimezoneKey = keyof typeof TIMEZONES
 
 interface Call {
   call_id: number
@@ -110,6 +122,8 @@ export default function DashboardPage() {
     search: "",
     startDate: "",
     endDate: "",
+    startTime: "",
+    endTime: "",
     selectedOutcomes: []
   })
 
@@ -125,6 +139,7 @@ export default function DashboardPage() {
   const [statsLoading, setStatsLoading] = useState(true)
   const [user, setUser] = useState<User | null>(null)
   const [userType, setUserType] = useState<string | null>(null)
+  const [selectedTimezone, setSelectedTimezone] = useState<TimezoneKey>('USA') // Default to US timezone since data is in US time
   const [selectAll, setSelectAll] = useState(false)
   const [pagination, setPagination] = useState({
     page: 1,
@@ -149,23 +164,75 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // Helper function to format date for API (ensures consistent timezone handling)
-  const formatDateForAPI = (dateString: string, isEndDate = false) => {
+  // Helper function to format date for API (converts to US timezone since server data is in US time)
+  const formatDateForAPI = (dateString: string, timeString: string = "", isEndDate = false) => {
     if (!dateString) return null
     
-    // Create date in user's local timezone
-    const date = new Date(dateString)
+    // Parse the date string
+    const [year, month, day] = dateString.split('-').map(Number)
     
-    if (isEndDate) {
-      // For end date, set to end of day (23:59:59)
-      date.setHours(23, 59, 59, 999)
+    // Determine the time to use
+    let hours = 0, minutes = 0, seconds = 0, milliseconds = 0
+    if (timeString) {
+      [hours, minutes] = timeString.split(':').map(Number)
     } else {
-      // For start date, set to beginning of day (00:00:00)
-      date.setHours(0, 0, 0, 0)
+      if (isEndDate) {
+        hours = 23
+        minutes = 59
+        seconds = 59
+        milliseconds = 999
+      }
     }
     
-    // Return ISO string which includes timezone
-    return date.toISOString()
+    if (selectedTimezone === 'PAKISTAN') {
+      // User selected Pakistan timezone - convert Pakistan time to US time for API
+      // Create a date as if it's in Pakistan, then convert to US
+      
+      // First, create the date/time combination
+      const dateTimeString = `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}T${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(milliseconds).padStart(3, '0')}`
+      
+      // Parse this as if it's in Pakistan timezone
+      const pakistanDate = new Date(dateTimeString + '+05:00') // Pakistan is UTC+5
+      
+      // Return as ISO string (this will be in UTC, which the server can handle)
+      return pakistanDate.toISOString()
+      
+    } else {
+      // User selected US timezone - create date directly for US timezone
+      // Since server expects US time, we can create this more directly
+      const date = new Date(year, month - 1, day, hours, minutes, seconds, milliseconds)
+      return date.toISOString()
+    }
+  }
+
+  // Helper function to format timestamp for display in selected timezone
+  const formatTimestampForDisplay = (timestamp: string) => {
+    const date = new Date(timestamp)
+    
+    return date.toLocaleString('en-US', {
+      timeZone: TIMEZONES[selectedTimezone],
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: true
+    })
+  }
+
+  // Helper function to get current time in selected timezone
+  const getCurrentTimeInTimezone = () => {
+    return new Date().toLocaleString('en-US', {
+      timeZone: TIMEZONES[selectedTimezone],
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+      timeZoneName: 'short'
+    })
   }
 
   // Helper function to build API params
@@ -178,14 +245,14 @@ export default function DashboardPage() {
 
     // Add date range filters with proper timezone handling
     if (filters.startDate) {
-      const formattedStartDate = formatDateForAPI(filters.startDate, false)
+      const formattedStartDate = formatDateForAPI(filters.startDate, filters.startTime, false)
       if (formattedStartDate) {
         params.append('start_date', formattedStartDate)
       }
     }
 
     if (filters.endDate) {
-      const formattedEndDate = formatDateForAPI(filters.endDate, true)
+      const formattedEndDate = formatDateForAPI(filters.endDate, filters.endTime, true)
       if (formattedEndDate) {
         params.append('end_date', formattedEndDate)
       }
@@ -275,7 +342,7 @@ export default function DashboardPage() {
       fetchStats()
       fetchOutcomeCounts()
     }
-  }, [pagination.page, filters, userType, user])
+  }, [pagination.page, filters, userType, user, selectedTimezone])
 
   // Update selectAll state when selectedOutcomes changes
   useEffect(() => {
@@ -287,6 +354,8 @@ export default function DashboardPage() {
       search: "",
       startDate: "",
       endDate: "",
+      startTime: "",
+      endTime: "",
       selectedOutcomes: []
     })
     setSelectAll(false)
@@ -364,10 +433,6 @@ export default function DashboardPage() {
     return "bg-purple-500"
   }
 
-  const formatTimestamp = (timestamp: string) => {
-    return new Date(timestamp).toLocaleString()
-  }
-
   const formatNumber = (num: number) => {
     return num.toLocaleString()
   }
@@ -432,6 +497,31 @@ export default function DashboardPage() {
                   </p>
                 )}
               </div>
+              
+              {/* Timezone Selector */}
+              <div className="flex items-center gap-3">
+                <Globe className="h-5 w-5 text-gray-500" />
+                <span className="text-sm font-medium text-gray-700">Timezone:</span>
+                <Select value={selectedTimezone} onValueChange={(value: TimezoneKey) => setSelectedTimezone(value)}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="USA">🇺🇸 USA (Eastern)</SelectItem>
+                    <SelectItem value="PAKISTAN">🇵🇰 Pakistan</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Current Time Display */}
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <div className="text-sm text-gray-700">
+                <strong>Current Time ({selectedTimezone === 'USA' ? 'US Eastern' : 'Pakistan'}):</strong> {getCurrentTimeInTimezone()}
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                Server data is stored in US timezone. Timestamps will be displayed in your selected timezone.
+              </div>
             </div>
 
             <div className="space-y-4">
@@ -464,6 +554,33 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-medium text-gray-700">Time Range (Optional)</span>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="time"
+                      className="w-32"
+                      placeholder="Start Time"
+                      value={filters.startTime}
+                      onChange={(e) => {
+                        setFilters({ ...filters, startTime: e.target.value })
+                        setPagination(prev => ({ ...prev, page: 1 }))
+                      }}
+                    />
+                    <span className="text-sm text-gray-500">to</span>
+                    <Input
+                      type="time"
+                      className="w-32"
+                      placeholder="End Time"
+                      value={filters.endTime}
+                      onChange={(e) => {
+                        setFilters({ ...filters, endTime: e.target.value })
+                        setPagination(prev => ({ ...prev, page: 1 }))
+                      }}
+                    />
+                  </div>
+                </div>
+
                 <div className="flex items-center gap-3 ml-auto">
                   <Button variant="outline" size="sm" onClick={handleReset}>
                     <RotateCcw className="h-4 w-4 mr-2" />
@@ -473,14 +590,19 @@ export default function DashboardPage() {
               </div>
 
               {/* Show current filter status */}
-              {(filters.startDate || filters.endDate) && (
+              {(filters.startDate || filters.endDate || filters.startTime || filters.endTime) && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <div className="text-sm text-blue-900">
-                    <strong>Date Filter:</strong>
+                    <strong>Date Filter ({selectedTimezone === 'USA' ? 'US Eastern' : 'Pakistan Time'}):</strong>
                     {filters.startDate && ` From ${new Date(filters.startDate).toLocaleDateString()}`}
+                    {filters.startTime && ` at ${filters.startTime}`}
                     {filters.endDate && ` To ${new Date(filters.endDate).toLocaleDateString()}`}
+                    {filters.endTime && ` at ${filters.endTime}`}
                     {!filters.startDate && filters.endDate && ` Up to ${new Date(filters.endDate).toLocaleDateString()}`}
                     {filters.startDate && !filters.endDate && ` From ${new Date(filters.startDate).toLocaleDateString()} onwards`}
+                  </div>
+                  <div className="text-xs text-blue-700 mt-1">
+                    Filtering server data (US timezone) based on {selectedTimezone === 'USA' ? 'US Eastern' : 'Pakistan'} time selection
                   </div>
                 </div>
               )}
@@ -488,7 +610,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Debug Component - Remove this after fixing the issue */}
-          <DebugFilter filters={filters} />
+          <DebugFilter filters={filters} selectedTimezone={selectedTimezone} />
 
           <div className="space-y-6 mt-6">
             {/* Stats Cards */}
@@ -596,7 +718,9 @@ export default function DashboardPage() {
                                 <th className="text-left py-3 px-4 font-medium text-gray-700">#</th>
                                 <th className="text-left py-3 px-4 font-medium text-gray-700">Phone No</th>
                                 <th className="text-left py-3 px-4 font-medium text-gray-700">Response Category</th>
-                                <th className="text-left py-3 px-4 font-medium text-gray-700">Timestamp</th>
+                                <th className="text-left py-3 px-4 font-medium text-gray-700">
+                                  Timestamp ({selectedTimezone === 'USA' ? 'US Eastern' : 'Pakistan'})
+                                </th>
                                 <th className="text-left py-3 px-4 font-medium text-gray-700">Action</th>
                               </tr>
                             </thead>
@@ -610,7 +734,7 @@ export default function DashboardPage() {
                                       {call.response_category}
                                     </Badge>
                                   </td>
-                                  <td className="py-3 px-4 text-sm text-gray-600">{formatTimestamp(call.timestamp)}</td>
+                                  <td className="py-3 px-4 text-sm text-gray-600">{formatTimestampForDisplay(call.timestamp)}</td>
                                   <td className="py-3 px-4">
                                     <Button
                                       variant="ghost"
