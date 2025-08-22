@@ -45,8 +45,8 @@ export async function GET(request: NextRequest) {
     const statsQuery = `
       SELECT 
         COUNT(*) as total_calls,
-        COUNT(CASE WHEN response_category LIKE '%INTERESTED%' THEN 1 END) as calls_forwarded,
-        COUNT(CASE WHEN response_category NOT LIKE '%INTERESTED%' THEN 1 END) as calls_dropped,
+        COUNT(CASE WHEN response_category LIKE '%Interested%' THEN 1 END) as calls_forwarded,
+        COUNT(CASE WHEN response_category NOT LIKE '%Interested%' THEN 1 END) as calls_dropped,
         response_category,
         COUNT(*) as category_count
       FROM calls 

@@ -340,12 +340,14 @@ export default function DashboardPage() {
   }
 
   const getCategoryColor = (category: string) => {
-    if (category.toLowerCase().includes('interested')) return "bg-green-500"
-    if (category.toLowerCase().includes('silent')) return "bg-yellow-500"
-    if (category.toLowerCase().includes('machine')) return "bg-blue-500"
-    if (category.toLowerCase().includes('unknown')) return "bg-gray-500"
-    return "bg-purple-500"
-  }
+  if (category.toLowerCase().includes('interested')) return "bg-green-500"
+  if (category.toLowerCase().includes('answering')) return "bg-blue-500"
+  if (category.toLowerCase().includes('unknown')) return "bg-gray-500"
+  if (category.toLowerCase().includes('dnc')) return "bg-red-500"
+  if (category.toLowerCase().includes('dnq')) return "bg-yellow-500"
+  if (category.toLowerCase().includes('not_interested')) return "bg-red-400"
+  return "bg-purple-500"
+}
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleString()
