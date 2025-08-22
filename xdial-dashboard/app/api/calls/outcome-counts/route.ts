@@ -25,14 +25,21 @@ export async function GET(request: NextRequest) {
       params.push(clientId)
     }
 
+    // Handle date filtering with proper timezone handling
     if (startDate) {
-      conditions.push(`c.timestamp >= $${params.length + 1}::timestamp`)
-      params.push(startDate)
+      // Convert ISO string to PostgreSQL timestamp
+      const startDateObj = new Date(startDate)
+      conditions.push(`c.timestamp >= $${params.length + 1}`)
+      params.push(startDateObj.toISOString())
+      console.log('Outcome counts: Added start date filter:', startDateObj.toISOString())
     }
 
     if (endDate) {
-      conditions.push(`c.timestamp <= $${params.length + 1}::timestamp`)
-      params.push(endDate)
+      // Convert ISO string to PostgreSQL timestamp
+      const endDateObj = new Date(endDate)
+      conditions.push(`c.timestamp <= $${params.length + 1}`)
+      params.push(endDateObj.toISOString())
+      console.log('Outcome counts: Added end date filter:', endDateObj.toISOString())
     }
 
     if (search) {
@@ -59,14 +66,20 @@ export async function GET(request: NextRequest) {
     const result = await pool.query(query, params)
 
     // Map database categories to filter categories
-    // Map database categories to filter categories
     const categoryMapping: { [key: string]: string } = {
-      'Answering_Machine': 'answering-machine',
-      'Interested': 'interested',
-      'Not_Interested': 'not-interested',
-      'DNC': 'do-not-call',
-      'DNQ': 'do-not-qualify',
-      'Unknown': 'unknown'
+      'ANSWER_MACHINE_hello': 'answering-machine',
+      'ANSWER MACHINE_hello': 'answering-machine',
+      'INTERESTED_hello': 'interested',
+      'INTERESTED hello': 'interested',
+      'Not_Responding_hello': 'not-interested',
+      'NOT_INTERESTED_hello': 'not-interested',
+      'DO_NOT_CALL_hello': 'do-not-call',
+      'DO_NOT_QUALIFY_hello': 'do-not-qualify',
+      'UNKNOWN_hello': 'unknown',
+      'UNKNOWN_greeting': 'unknown',
+      'UNKNOWN hello': 'unknown',
+      'USER_SILENT_hello': 'user-silent',
+      'User Silent_hello': 'user-silent'
     }
 
     // Aggregate counts by filter category
@@ -76,7 +89,8 @@ export async function GET(request: NextRequest) {
       'not-interested': 0,
       'do-not-call': 0,
       'do-not-qualify': 0,
-      'unknown': 0
+      'unknown': 0,
+      'user-silent': 0
     }
 
     result.rows.forEach(row => {
@@ -85,6 +99,7 @@ export async function GET(request: NextRequest) {
         outcomeCounts[filterCategory] += parseInt(row.count)
       } else {
         // If category doesn't match our mapping, add to unknown
+        console.log('Unmapped category found:', row.response_category)
         outcomeCounts['unknown'] += parseInt(row.count)
       }
     })
@@ -94,9 +109,9 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(outcomeCounts)
   } catch (error) {
     console.error('Error fetching outcome counts:', error)
-    return NextResponse.json({
+    return NextResponse.json({ 
       error: 'Failed to fetch outcome counts',
-      details: error.message
+      details: error.message 
     }, { status: 500 })
   }
 }

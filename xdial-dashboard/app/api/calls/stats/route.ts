@@ -25,14 +25,21 @@ export async function GET(request: NextRequest) {
       params.push(clientId)
     }
 
+    // Handle date filtering with proper timezone handling
     if (startDate) {
-      conditions.push(`timestamp >= $${params.length + 1}::timestamp`)
-      params.push(startDate)
+      // Convert ISO string to PostgreSQL timestamp
+      const startDateObj = new Date(startDate)
+      conditions.push(`timestamp >= $${params.length + 1}`)
+      params.push(startDateObj.toISOString())
+      console.log('Stats: Added start date filter:', startDateObj.toISOString())
     }
 
     if (endDate) {
-      conditions.push(`timestamp <= $${params.length + 1}::timestamp`)
-      params.push(endDate)
+      // Convert ISO string to PostgreSQL timestamp
+      const endDateObj = new Date(endDate)
+      conditions.push(`timestamp <= $${params.length + 1}`)
+      params.push(endDateObj.toISOString())
+      console.log('Stats: Added end date filter:', endDateObj.toISOString())
     }
 
     if (search) {
@@ -45,8 +52,8 @@ export async function GET(request: NextRequest) {
     const statsQuery = `
       SELECT 
         COUNT(*) as total_calls,
-        COUNT(CASE WHEN response_category LIKE '%Interested%' THEN 1 END) as calls_forwarded,
-        COUNT(CASE WHEN response_category NOT LIKE '%Interested%' THEN 1 END) as calls_dropped,
+        COUNT(CASE WHEN response_category LIKE '%Interested%' OR response_category LIKE '%INTERESTED%' THEN 1 END) as calls_forwarded,
+        COUNT(CASE WHEN response_category NOT LIKE '%Interested%' AND response_category NOT LIKE '%INTERESTED%' THEN 1 END) as calls_dropped,
         response_category,
         COUNT(*) as category_count
       FROM calls 
@@ -88,4 +95,3 @@ export async function GET(request: NextRequest) {
     }, { status: 500 })
   }
 }
-

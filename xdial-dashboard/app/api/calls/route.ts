@@ -49,12 +49,13 @@ export async function GET(request: NextRequest) {
     if (responseCategories.length > 0) {
       // Map filter IDs to actual database values
       const categoryMapping: { [key: string]: string[] } = {
-        'answering-machine': ['Answering_Machine'],
-        'interested': ['Interested'],
-        'not-interested': ['Not_Interested'],
-        'do-not-call': ['DNC'],
-        'do-not-qualify': ['DNQ'],
-        'unknown': ['Unknown']
+        'answering-machine': ['ANSWER_MACHINE_hello', 'ANSWER MACHINE_hello'],
+        'interested': ['INTERESTED_hello', 'INTERESTED hello'],
+        'not-interested': ['Not_Responding_hello', 'NOT_INTERESTED_hello'],
+        'do-not-call': ['DO_NOT_CALL_hello'],
+        'do-not-qualify': ['DO_NOT_QUALIFY_hello'],
+        'unknown': ['UNKNOWN_hello', 'UNKNOWN_greeting', 'UNKNOWN hello'],
+        'user-silent': ['USER_SILENT_hello', 'User Silent_hello']
       }
 
       const dbCategories: string[] = []
@@ -71,17 +72,21 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Handle date filtering properly
+    // Handle date filtering with proper timezone handling
     if (startDate) {
-      conditions.push(`c.timestamp >= $${params.length + 1}::timestamp`)
-      params.push(startDate)
-      console.log('Added start date filter:', startDate)
+      // Convert ISO string to PostgreSQL timestamp
+      const startDateObj = new Date(startDate)
+      conditions.push(`c.timestamp >= $${params.length + 1}`)
+      params.push(startDateObj.toISOString())
+      console.log('Added start date filter:', startDateObj.toISOString())
     }
 
     if (endDate) {
-      conditions.push(`c.timestamp <= $${params.length + 1}::timestamp`)
-      params.push(endDate)
-      console.log('Added end date filter:', endDate)
+      // Convert ISO string to PostgreSQL timestamp
+      const endDateObj = new Date(endDate)
+      conditions.push(`c.timestamp <= $${params.length + 1}`)
+      params.push(endDateObj.toISOString())
+      console.log('Added end date filter:', endDateObj.toISOString())
     }
 
     if (search) {
@@ -99,10 +104,10 @@ export async function GET(request: NextRequest) {
       LEFT JOIN clients cl ON c.client_id = cl.client_id 
       ${whereClause}
     `
-
+    
     console.log('Count Query:', countQuery)
     console.log('Count Params:', params)
-
+    
     const countResult = await pool.query(countQuery, params)
     const total = parseInt(countResult.rows[0].total)
 
@@ -113,7 +118,7 @@ export async function GET(request: NextRequest) {
         c.client_id,
         c.phone_number,
         c.response_category,
-        c.timestamp,
+        c.timestamp AT TIME ZONE 'UTC' AT TIME ZONE 'UTC' as timestamp,
         c.recording_url,
         c.recording_length,
         COALESCE(cl.client_name, 'Unknown Client') as client_name
@@ -125,7 +130,7 @@ export async function GET(request: NextRequest) {
     `
 
     const dataParams = [...params, limit, offset]
-
+    
     console.log('Data Query:', dataQuery)
     console.log('Data Params:', dataParams)
 
@@ -134,7 +139,8 @@ export async function GET(request: NextRequest) {
     console.log('Query results:', {
       totalRows: total,
       returnedRows: result.rows.length,
-      filters: { startDate, endDate, clientId, responseCategories }
+      filters: { startDate, endDate, clientId, responseCategories },
+      sampleTimestamps: result.rows.slice(0, 3).map(row => row.timestamp)
     })
 
     return NextResponse.json({
@@ -152,9 +158,9 @@ export async function GET(request: NextRequest) {
       message: error.message,
       stack: error.stack
     })
-    return NextResponse.json({
+    return NextResponse.json({ 
       error: 'Failed to fetch calls',
-      details: error.message
+      details: error.message 
     }, { status: 500 })
   }
 }

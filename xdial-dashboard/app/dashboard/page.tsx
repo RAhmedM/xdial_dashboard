@@ -12,9 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
 import {
   Calendar,
-  Clock,
   RotateCcw,
-  Filter,
   Search,
   Play,
   ChevronLeft,
@@ -32,9 +30,8 @@ import { useToast } from "@/hooks/use-toast"
 
 interface FilterState {
   search: string
-  date: string  // Changed from startDate to just date
-  startTime: string
-  endTime: string
+  startDate: string
+  endDate: string
   selectedOutcomes: string[]
 }
 
@@ -110,9 +107,8 @@ const callOutcomes = [
 export default function DashboardPage() {
   const [filters, setFilters] = useState<FilterState>({
     search: "",
-    date: "",  // Changed from startDate to date
-    startTime: "",
-    endTime: "",
+    startDate: "",
+    endDate: "",
     selectedOutcomes: []
   })
 
@@ -152,6 +148,25 @@ export default function DashboardPage() {
     }
   }, [])
 
+  // Helper function to format date for API (ensures consistent timezone handling)
+  const formatDateForAPI = (dateString: string, isEndDate = false) => {
+    if (!dateString) return null
+    
+    // Create date in user's local timezone
+    const date = new Date(dateString)
+    
+    if (isEndDate) {
+      // For end date, set to end of day (23:59:59)
+      date.setHours(23, 59, 59, 999)
+    } else {
+      // For start date, set to beginning of day (00:00:00)
+      date.setHours(0, 0, 0, 0)
+    }
+    
+    // Return ISO string which includes timezone
+    return date.toISOString()
+  }
+
   // Helper function to build API params
   const buildApiParams = (includeOutcomes = true) => {
     const params = new URLSearchParams()
@@ -160,18 +175,18 @@ export default function DashboardPage() {
       params.append('search', filters.search)
     }
 
-    // Add date/time filters - single date with time range
-    if (filters.date) {
-      if (filters.startTime) {
-        params.append('start_date', `${filters.date} ${filters.startTime}:00`)
-      } else {
-        params.append('start_date', `${filters.date} 00:00:00`)
+    // Add date range filters with proper timezone handling
+    if (filters.startDate) {
+      const formattedStartDate = formatDateForAPI(filters.startDate, false)
+      if (formattedStartDate) {
+        params.append('start_date', formattedStartDate)
       }
+    }
 
-      if (filters.endTime) {
-        params.append('end_date', `${filters.date} ${filters.endTime}:59`)
-      } else {
-        params.append('end_date', `${filters.date} 23:59:59`)
+    if (filters.endDate) {
+      const formattedEndDate = formatDateForAPI(filters.endDate, true)
+      if (formattedEndDate) {
+        params.append('end_date', formattedEndDate)
       }
     }
 
@@ -269,9 +284,8 @@ export default function DashboardPage() {
   const handleReset = () => {
     setFilters({
       search: "",
-      date: "",  // Changed from startDate/endDate
-      startTime: "",
-      endTime: "",
+      startDate: "",
+      endDate: "",
       selectedOutcomes: []
     })
     setSelectAll(false)
@@ -340,14 +354,14 @@ export default function DashboardPage() {
   }
 
   const getCategoryColor = (category: string) => {
-  if (category.toLowerCase().includes('interested')) return "bg-green-500"
-  if (category.toLowerCase().includes('answering')) return "bg-blue-500"
-  if (category.toLowerCase().includes('unknown')) return "bg-gray-500"
-  if (category.toLowerCase().includes('dnc')) return "bg-red-500"
-  if (category.toLowerCase().includes('dnq')) return "bg-yellow-500"
-  if (category.toLowerCase().includes('not_interested')) return "bg-red-400"
-  return "bg-purple-500"
-}
+    if (category.toLowerCase().includes('interested')) return "bg-green-500"
+    if (category.toLowerCase().includes('answering')) return "bg-blue-500"
+    if (category.toLowerCase().includes('unknown')) return "bg-gray-500"
+    if (category.toLowerCase().includes('dnc')) return "bg-red-500"
+    if (category.toLowerCase().includes('dnq')) return "bg-yellow-500"
+    if (category.toLowerCase().includes('not_interested')) return "bg-red-400"
+    return "bg-purple-500"
+  }
 
   const formatTimestamp = (timestamp: string) => {
     return new Date(timestamp).toLocaleString()
@@ -423,42 +437,30 @@ export default function DashboardPage() {
               <div className="flex items-center gap-6 flex-wrap">
                 <div className="flex items-center gap-3">
                   <Calendar className="h-5 w-5 text-gray-500" />
-                  <span className="text-sm font-medium text-gray-700">Date</span>
-                  <Input
-                    type="date"
-                    className="w-40"
-                    value={filters.date}
-                    onChange={(e) => {
-                      setFilters({ ...filters, date: e.target.value })
-                      setPagination(prev => ({ ...prev, page: 1 }))
-                    }}
-                  />
-                </div>
-
-                <div className="flex items-center gap-3">
-                  <Clock className="h-5 w-5 text-gray-500" />
-                  <span className="text-sm font-medium text-gray-700">Time Range</span>
-                  <Input
-                    type="time"
-                    className="w-24"
-                    value={filters.startTime}
-                    onChange={(e) => {
-                      setFilters({ ...filters, startTime: e.target.value })
-                      setPagination(prev => ({ ...prev, page: 1 }))
-                    }}
-                    placeholder="Start"
-                  />
-                  <span className="text-sm text-gray-500">to</span>
-                  <Input
-                    type="time"
-                    className="w-24"
-                    value={filters.endTime}
-                    onChange={(e) => {
-                      setFilters({ ...filters, endTime: e.target.value })
-                      setPagination(prev => ({ ...prev, page: 1 }))
-                    }}
-                    placeholder="End"
-                  />
+                  <span className="text-sm font-medium text-gray-700">Date Range</span>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="date"
+                      className="w-40"
+                      placeholder="Start Date"
+                      value={filters.startDate}
+                      onChange={(e) => {
+                        setFilters({ ...filters, startDate: e.target.value })
+                        setPagination(prev => ({ ...prev, page: 1 }))
+                      }}
+                    />
+                    <span className="text-sm text-gray-500">to</span>
+                    <Input
+                      type="date"
+                      className="w-40"
+                      placeholder="End Date"
+                      value={filters.endDate}
+                      onChange={(e) => {
+                        setFilters({ ...filters, endDate: e.target.value })
+                        setPagination(prev => ({ ...prev, page: 1 }))
+                      }}
+                    />
+                  </div>
                 </div>
 
                 <div className="flex items-center gap-3 ml-auto">
@@ -470,12 +472,14 @@ export default function DashboardPage() {
               </div>
 
               {/* Show current filter status */}
-              {(filters.date || filters.startTime || filters.endTime) && (
+              {(filters.startDate || filters.endDate) && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <div className="text-sm text-blue-900">
                     <strong>Date Filter:</strong>
-                    {filters.date && ` ${filters.date}`}
-                    {(filters.startTime || filters.endTime) && ` from ${filters.startTime || '00:00'} to ${filters.endTime || '23:59'}`}
+                    {filters.startDate && ` From ${new Date(filters.startDate).toLocaleDateString()}`}
+                    {filters.endDate && ` To ${new Date(filters.endDate).toLocaleDateString()}`}
+                    {!filters.startDate && filters.endDate && ` Up to ${new Date(filters.endDate).toLocaleDateString()}`}
+                    {filters.startDate && !filters.endDate && ` From ${new Date(filters.startDate).toLocaleDateString()} onwards`}
                   </div>
                 </div>
               )}
@@ -560,7 +564,7 @@ export default function DashboardPage() {
                         <div className="relative">
                           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                           <Input
-                            placeholder="Search records..."
+                            placeholder="Search phone numbers..."
                             className="pl-10 w-64"
                             value={filters.search}
                             onChange={(e) => {
