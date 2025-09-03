@@ -76,7 +76,7 @@ const categoryMapping: { [key: string]: string[] } = {
     if (startDate) {
       // Convert ISO string to timestamp for comparison with database (which stores US timezone)
       const startDateObj = new Date(startDate)
-      conditions.push(`c.timestamp >= ${params.length + 1}`)
+      conditions.push(`c.timestamp >= $${params.length + 1}`)
       params.push(startDateObj.toISOString())
       console.log('Added start date filter (US timezone):', startDateObj.toISOString())
     }
@@ -84,7 +84,7 @@ const categoryMapping: { [key: string]: string[] } = {
     if (endDate) {
       // Convert ISO string to timestamp for comparison with database (which stores US timezone)  
       const endDateObj = new Date(endDate)
-      conditions.push(`c.timestamp <= ${params.length + 1}`)
+      conditions.push(`c.timestamp <= $${params.length + 1}`)
       params.push(endDateObj.toISOString())
       console.log('Added end date filter (US timezone):', endDateObj.toISOString())
     }
@@ -126,7 +126,7 @@ const categoryMapping: { [key: string]: string[] } = {
       LEFT JOIN clients cl ON c.client_id = cl.client_id 
       ${whereClause}
       ORDER BY c.timestamp DESC
-      LIMIT ${params.length + 1} OFFSET ${params.length + 2}
+      LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `
 
     const dataParams = [...params, limit, offset]

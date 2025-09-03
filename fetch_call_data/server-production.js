@@ -8,7 +8,7 @@ const cors = require('cors');
 
 // Production configuration
 const config = {
-    port: process.env.PORT || 3000,
+    port: process.env.PORT || 3331,
     database: {
         user: process.env.DB_USER || 'admin',
         host: process.env.DB_HOST || 'localhost',
