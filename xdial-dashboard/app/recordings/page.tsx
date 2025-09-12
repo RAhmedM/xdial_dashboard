@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { FileAudio, Play, Pause, Download, Search, Calendar, Filter, AlertTriangle, RefreshCcw } from 'lucide-react'
-import DashboardHeader from '@/components/dashboard-header'
+import { DashboardHeader } from '@/components/dashboard-header'
 
 interface Recording {
   id: string
