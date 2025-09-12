@@ -1,9 +1,10 @@
+// components/dashboard-header.tsx
 "use client"
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Phone, User, Building2 } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { Phone, User, Building2, FileAudio, BarChart } from "lucide-react"
+import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 
 interface UserData {
@@ -18,6 +19,7 @@ export function DashboardHeader() {
   const [user, setUser] = useState<UserData | null>(null)
   const [userType, setUserType] = useState<string | null>(null)
   const router = useRouter()
+  const pathname = usePathname()
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -34,8 +36,7 @@ export function DashboardHeader() {
   }, [])
 
   const handleLogout = () => {
-    sessionStorage.removeItem('user')
-    sessionStorage.removeItem('userType')
+    sessionStorage.clear()
     router.push('/login')
   }
 
@@ -46,7 +47,7 @@ export function DashboardHeader() {
           <Phone className="h-6 w-6 text-blue-500" />
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">XDialNetworks Reports</h1>
+              <h1 className="text-xl font-semibold text-gray-900">XDialNetworks</h1>
               {user?.name && (
                 <p className="text-sm text-gray-500">
                   Welcome back, {user.name}
@@ -70,8 +71,26 @@ export function DashboardHeader() {
         </div>
 
         <div className="flex items-center gap-3">
-          <Button className="bg-blue-500 hover:bg-blue-600 text-white">Reports</Button>
-          <Button variant="outline">Recordings</Button>
+          <Link href="/dashboard">
+            <Button 
+              variant={pathname === '/dashboard' ? 'default' : 'outline'}
+              className={pathname === '/dashboard' ? 'bg-blue-500 hover:bg-blue-600 text-white' : ''}
+            >
+              <BarChart className="h-4 w-4 mr-2" />
+              Reports
+            </Button>
+          </Link>
+          
+          <Link href="/recordings">
+            <Button 
+              variant={pathname === '/recordings' ? 'default' : 'outline'}
+              className={pathname === '/recordings' ? 'bg-blue-500 hover:bg-blue-600 text-white' : ''}
+            >
+              <FileAudio className="h-4 w-4 mr-2" />
+              Recordings
+            </Button>
+          </Link>
+          
           <Button variant="outline" size="sm" onClick={handleLogout}>
             <User className="h-4 w-4 mr-2" />
             Logout
