@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Phone, User, Building2, FileAudio, BarChart } from "lucide-react"
+import { Phone, User, Building2, FileAudio, BarChart, Download } from "lucide-react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 
@@ -90,8 +90,18 @@ export function DashboardHeader() {
               Recordings
             </Button>
           </Link>
+
+          <Link href="/data-export">
+            <Button 
+              variant={pathname === '/data-export' ? 'default' : 'outline'}
+              className={pathname === '/data-export' ? 'bg-blue-500 hover:bg-blue-600 text-white' : ''}
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Data Export
+            </Button>
+          </Link>
           
-          <Button variant="outline" size="sm" onClick={handleLogout}>
+          <Button onClick={handleLogout} variant="ghost">
             <User className="h-4 w-4 mr-2" />
             Logout
           </Button>

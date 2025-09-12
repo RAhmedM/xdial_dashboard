@@ -241,6 +241,10 @@ export default function DashboardPage() {
       
       return `${usTime} (Pakistan: ${pakistanTime})`
     }
+    catch (error) {
+      console.error('Error formatting date for API:', error, { date, time })
+      return null
+    }
   }
 
   // Helper function to build API params
