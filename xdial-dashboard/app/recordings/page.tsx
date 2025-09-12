@@ -75,20 +75,40 @@ export default function RecordingsPage() {
 
   // Fetch recordings
   const fetchRecordings = async () => {
-    if (!user?.client_id) return
+    // Try both client_id and id properties since they might be stored differently
+    const clientId = user?.client_id || user?.id
+    
+    console.log('🎬 Recordings fetch attempt:', { 
+      user, 
+      userType, 
+      clientId, 
+      selectedDate 
+    })
+    
+    if (!clientId) {
+      console.log('❌ No client ID found, not fetching recordings')
+      setLoading(false)
+      return
+    }
 
+    console.log('🚀 Starting recordings fetch...')
     setLoading(true)
     setError(null)
     setWarning(null)
     
     try {
-      const response = await fetch(`/api/recordings?client_id=${user.client_id}&date=${selectedDate}`)
+      const url = `/api/recordings?client_id=${clientId}&date=${selectedDate}`
+      console.log('📞 Fetching recordings from:', url)
+      
+      const response = await fetch(url)
       
       const data: ApiResponse = await response.json()
       
       if (!response.ok) {
         throw new Error(data.error || 'Failed to fetch recordings')
       }
+      
+      console.log('✅ Recordings received:', data)
       
       setRecordings(data.recordings || [])
       setFilteredRecordings(data.recordings || [])
@@ -100,7 +120,7 @@ export default function RecordingsPage() {
       }
       
     } catch (error) {
-      console.error('Error fetching recordings:', error)
+      console.error('💥 Error fetching recordings:', error)
       setError(error instanceof Error ? error.message : 'Failed to load recordings')
       setRecordings([])
       setFilteredRecordings([])
@@ -110,8 +130,14 @@ export default function RecordingsPage() {
   }
 
   useEffect(() => {
-    if (user?.client_id) {
+    const clientId = user?.client_id || user?.id
+    console.log('🔄 Recordings useEffect triggered:', { user, userType, clientId })
+    
+    if (clientId) {
       fetchRecordings()
+    } else {
+      console.log('⚠️ No client ID available, setting loading to false')
+      setLoading(false)
     }
   }, [user, selectedDate])
 
