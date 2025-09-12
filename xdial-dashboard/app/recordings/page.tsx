@@ -5,10 +5,9 @@ import { format } from 'date-fns'
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { FileAudio, Play, Pause, Download, Search, Calendar, Filter, AlertTriangle, RefreshCcw } from 'lucide-react'
+import { FileAudio, Play, Pause, Download, Search, Calendar, AlertTriangle, RefreshCcw, ChevronUp, ChevronDown } from 'lucide-react'
 import { DashboardHeader } from '@/components/dashboard-header'
 
 interface Recording {
@@ -44,19 +43,23 @@ interface ApiResponse {
   error?: string
 }
 
+type SortField = 'timestamp' | 'phone_number' | 'duration' | 'response_category' | 'size'
+type SortDirection = 'asc' | 'desc'
+
 export default function RecordingsPage() {
   const [recordings, setRecordings] = useState<Recording[]>([])
   const [filteredRecordings, setFilteredRecordings] = useState<Recording[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [searchTerm, setSearchTerm] = useState("")
-  const [categoryFilter, setCategoryFilter] = useState("all")
   const [playingId, setPlayingId] = useState<string | null>(null)
   const [user, setUser] = useState<User | null>(null)
   const [userType, setUserType] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
   const [clientName, setClientName] = useState<string>('')
+  const [sortField, setSortField] = useState<SortField>('timestamp')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
 
   // Get user info on component mount
   useEffect(() => {
@@ -141,7 +144,7 @@ export default function RecordingsPage() {
     }
   }, [user, selectedDate])
 
-  // Filter recordings based on search and category
+  // Filter and sort recordings
   useEffect(() => {
     let filtered = [...recordings]
 
@@ -155,13 +158,57 @@ export default function RecordingsPage() {
       )
     }
 
-    // Category filter
-    if (categoryFilter !== "all") {
-      filtered = filtered.filter(rec => rec.response_category === categoryFilter)
-    }
+    // Sort recordings
+    filtered.sort((a, b) => {
+      let aValue: string | number
+      let bValue: string | number
+
+      switch (sortField) {
+        case 'timestamp':
+          aValue = new Date(a.timestamp).getTime()
+          bValue = new Date(b.timestamp).getTime()
+          break
+        case 'phone_number':
+          aValue = a.phone_number
+          bValue = b.phone_number
+          break
+        case 'duration':
+          // Convert duration to seconds for proper sorting
+          aValue = durationToSeconds(a.duration)
+          bValue = durationToSeconds(b.duration)
+          break
+        case 'response_category':
+          aValue = a.response_category
+          bValue = b.response_category
+          break
+        case 'size':
+          // Convert size to bytes for proper sorting
+          aValue = sizeToBytes(a.size || '')
+          bValue = sizeToBytes(b.size || '')
+          break
+        default:
+          aValue = a.timestamp
+          bValue = b.timestamp
+      }
+
+      if (sortDirection === 'asc') {
+        return aValue > bValue ? 1 : -1
+      } else {
+        return aValue < bValue ? 1 : -1
+      }
+    })
 
     setFilteredRecordings(filtered)
-  }, [searchTerm, categoryFilter, recordings])
+  }, [searchTerm, recordings, sortField, sortDirection])
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('desc')
+    }
+  }
 
   const handleDownload = async (recording: Recording) => {
     try {
@@ -171,7 +218,6 @@ export default function RecordingsPage() {
       link.download = recording.filename || `recording_${recording.phone_number}_${recording.timestamp.replace(/[: ]/g, '-')}.wav`
       link.target = '_blank'
       
-      // For external URLs, we might need to handle CORS differently
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
@@ -231,13 +277,60 @@ export default function RecordingsPage() {
       case 'FAILED':
       case 'ERROR':
         return 'bg-red-100 text-red-800'
+      case 'EXTERNAL_RECORDING':
+        return 'bg-purple-100 text-purple-800'
       case 'UNKNOWN':
       default:
         return 'bg-gray-100 text-gray-800'
     }
   }
 
-  const uniqueCategories = Array.from(new Set(recordings.map(r => r.response_category)))
+  // Helper functions for sorting
+  const durationToSeconds = (duration: string): number => {
+    if (!duration) return 0
+    if (duration.includes(':')) {
+      const parts = duration.split(':').map(p => parseInt(p) || 0)
+      if (parts.length === 3) {
+        return parts[0] * 3600 + parts[1] * 60 + parts[2]
+      } else if (parts.length === 2) {
+        return parts[0] * 60 + parts[1]
+      }
+    }
+    return parseInt(duration) || 0
+  }
+
+  const sizeToBytes = (size: string): number => {
+    if (!size) return 0
+    const match = size.match(/^([\d.]+)\s*([KMGT]?B)$/i)
+    if (match) {
+      const value = parseFloat(match[1])
+      const unit = match[2].toUpperCase()
+      switch (unit) {
+        case 'KB': return value * 1024
+        case 'MB': return value * 1024 * 1024
+        case 'GB': return value * 1024 * 1024 * 1024
+        case 'TB': return value * 1024 * 1024 * 1024 * 1024
+        default: return value
+      }
+    }
+    return 0
+  }
+
+  const SortableHeader = ({ field, children }: { field: SortField, children: React.ReactNode }) => (
+    <th 
+      className="text-left py-3 px-4 font-medium text-gray-700 cursor-pointer hover:bg-gray-50 select-none"
+      onClick={() => handleSort(field)}
+    >
+      <div className="flex items-center gap-1">
+        {children}
+        {sortField === field && (
+          sortDirection === 'asc' ? 
+            <ChevronUp className="h-4 w-4" /> : 
+            <ChevronDown className="h-4 w-4" />
+        )}
+      </div>
+    </th>
+  )
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -289,7 +382,7 @@ export default function RecordingsPage() {
           {/* Filters */}
           <Card className="mb-6">
             <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 {/* Date Picker */}
                 <div className="space-y-2">
                   <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
@@ -316,27 +409,6 @@ export default function RecordingsPage() {
                     onChange={(e) => setSearchTerm(e.target.value)}
                     className="w-full"
                   />
-                </div>
-
-                {/* Category Filter */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
-                    <Filter className="h-4 w-4" />
-                    Category
-                  </label>
-                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="All Categories" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Categories</SelectItem>
-                      {uniqueCategories.map(category => (
-                        <SelectItem key={category} value={category}>
-                          {category}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
                 </div>
 
                 {/* Refresh Button */}
@@ -366,7 +438,7 @@ export default function RecordingsPage() {
             </p>
           </div>
 
-          {/* Recordings List */}
+          {/* Recordings Table */}
           {loading ? (
             <Card>
               <CardContent className="pt-6">
@@ -392,98 +464,90 @@ export default function RecordingsPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="space-y-4">
-              {filteredRecordings.map((recording) => (
-                <Card key={recording.id} className="hover:shadow-md transition-shadow">
-                  <CardContent className="pt-6">
-                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                      {/* Recording Info */}
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3 className="text-lg font-semibold text-gray-900">
+            <Card>
+              <CardContent className="p-0">
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead className="border-b border-gray-200 bg-gray-50">
+                      <tr>
+                        <SortableHeader field="timestamp">Time</SortableHeader>
+                        <SortableHeader field="phone_number">Phone Number</SortableHeader>
+                        <SortableHeader field="duration">Duration</SortableHeader>
+                        <SortableHeader field="response_category">Category</SortableHeader>
+                        <SortableHeader field="size">Size</SortableHeader>
+                        <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredRecordings.map((recording) => (
+                        <tr key={recording.id} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="py-3 px-4 text-sm text-gray-900">
+                            {formatTimestamp(recording.timestamp)}
+                          </td>
+                          <td className="py-3 px-4 text-sm font-medium text-gray-900">
                             {recording.phone_number}
-                          </h3>
-                          <Badge className={getStatusBadgeColor(recording.response_category)}>
-                            {recording.response_category}
-                          </Badge>
-                          {recording.size && (
-                            <span className="text-sm text-gray-500">
-                              {recording.size}
-                            </span>
-                          )}
-                        </div>
-                        
-                        <div className="space-y-1 text-sm text-gray-600">
-                          <div className="flex items-center gap-4">
-                            <span>
-                              <strong>Time:</strong> {formatTimestamp(recording.timestamp)}
-                            </span>
-                            <span>
-                              <strong>Duration:</strong> {formatDuration(recording.duration)}
-                            </span>
-                          </div>
-                          
-                          {recording.filename && (
-                            <div>
-                              <strong>File:</strong> {recording.filename}
-                            </div>
-                          )}
-                          
-                          {recording.call_id && (
-                            <div>
-                              <strong>Call ID:</strong> {recording.call_id}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center gap-2">
-                        {/* Audio Player */}
-                        {recording.audio_url && (
-                          <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handlePlay(recording.id)}
-                            >
-                              {playingId === recording.id ? (
-                                <Pause className="h-4 w-4" />
-                              ) : (
-                                <Play className="h-4 w-4" />
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-900">
+                            {formatDuration(recording.duration)}
+                          </td>
+                          <td className="py-3 px-4">
+                            <Badge className={getStatusBadgeColor(recording.response_category)}>
+                              {recording.response_category}
+                            </Badge>
+                          </td>
+                          <td className="py-3 px-4 text-sm text-gray-500">
+                            {recording.size || '-'}
+                          </td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-2">
+                              {/* Audio Player */}
+                              {recording.audio_url && (
+                                <div className="flex items-center gap-2">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => handlePlay(recording.id)}
+                                  >
+                                    {playingId === recording.id ? (
+                                      <Pause className="h-4 w-4" />
+                                    ) : (
+                                      <Play className="h-4 w-4" />
+                                    )}
+                                  </Button>
+                                  
+                                  {playingId === recording.id && (
+                                    <audio
+                                      controls
+                                      autoPlay
+                                      className="w-32"
+                                      onEnded={() => setPlayingId(null)}
+                                    >
+                                      <source src={recording.audio_url} type="audio/wav" />
+                                      <source src={recording.audio_url} type="audio/mpeg" />
+                                      Your browser does not support the audio element.
+                                    </audio>
+                                  )}
+                                </div>
                               )}
-                            </Button>
-                            
-                            {playingId === recording.id && (
-                              <audio
-                                controls
-                                autoPlay
-                                className="w-48"
-                                onEnded={() => setPlayingId(null)}
-                              >
-                                <source src={recording.audio_url} type="audio/wav" />
-                                <source src={recording.audio_url} type="audio/mpeg" />
-                                Your browser does not support the audio element.
-                              </audio>
-                            )}
-                          </div>
-                        )}
 
-                        {/* Download Button */}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleDownload(recording)}
-                        >
-                          <Download className="h-4 w-4 mr-1" />
-                          Download
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+                              {/* Download Button */}
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleDownload(recording)}
+                              >
+                                <Download className="h-4 w-4 mr-1" />
+                                Download
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </CardContent>
+            </Card>
           )}
         </div>
       </main>
