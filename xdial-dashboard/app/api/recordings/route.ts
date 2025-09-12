@@ -1,64 +1,31 @@
 // app/api/recordings/route.ts
 import { NextRequest, NextResponse } from 'next/server'
-import { Pool } from 'pg'
 import https from 'https'
 import { URL } from 'url'
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-})
-
 export async function GET(request: NextRequest) {
-  console.log('🔥🔥🔥 RECORDINGS API CALLED - NEW VERSION 🔥🔥🔥')
+  console.log('🔥🔥🔥 RECORDINGS API CALLED - EXTENSION VERSION 🔥🔥🔥')
   
   try {
     const { searchParams } = new URL(request.url)
-    const clientId = searchParams.get('client_id')
+    const extension = searchParams.get('extension')
     const date = searchParams.get('date')
 
     console.log(`📋 Request Parameters:`)
-    console.log(`   - Client ID: ${clientId}`)
+    console.log(`   - Extension: ${extension}`)
     console.log(`   - Date: ${date}`)
 
-    if (!clientId || !date) {
+    if (!extension || !date) {
       console.log('❌ Missing required parameters')
       return NextResponse.json({ 
-        error: !clientId ? 'Client ID required' : 'Date required',
-        recordings: [] 
-      }, { status: 400 })
-    }
-
-    console.log('🏢 Fetching client info from database...')
-    
-    const clientResult = await pool.query(
-      'SELECT fetch_recording_url, extension, client_name FROM clients WHERE client_id = $1',
-      [clientId]
-    )
-
-    console.log(`📊 Database query completed: ${clientResult.rows.length} rows found`)
-
-    if (clientResult.rows.length === 0) {
-      console.log('❌ Client not found in database')
-      return NextResponse.json({ error: 'Client not found', recordings: [] }, { status: 404 })
-    }
-
-    const client = clientResult.rows[0]
-    console.log(`✅ Client found:`)
-    console.log(`   - Name: ${client.client_name}`)
-    console.log(`   - Recording URL: ${client.fetch_recording_url}`)
-    console.log(`   - Extension: ${client.extension}`)
-
-    if (!client.fetch_recording_url || !client.extension) {
-      console.log('❌ Client missing recording URL or extension configuration')
-      return NextResponse.json({ 
-        error: 'Client missing recording URL or extension configuration',
+        error: !extension ? 'Extension required' : 'Date required',
         recordings: [] 
       }, { status: 400 })
     }
 
     // Format date from YYYY-MM-DD to YYYYMMDD
     const formattedDate = date.replace(/-/g, '')
-    const apiUrl = `${client.fetch_recording_url}?date=${formattedDate}&extension=${client.extension}`
+    const apiUrl = `https://xliteshared3.xdialnetworks.com/server_api/fetch_recording.php?date=${formattedDate}&extension=${extension}`
     
     console.log(`🌐 External API URL: ${apiUrl}`)
     console.log(`🚀 Making HTTPS request with SSL certificate bypass...`)
