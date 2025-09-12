@@ -133,13 +133,13 @@ export default function RecordingsPage() {
   }
 
   useEffect(() => {
-    const clientId = user?.client_id || user?.id
-    console.log('🔄 Recordings useEffect triggered:', { user, userType, clientId })
+    const extension = user?.extension
+    console.log('🔄 Recordings useEffect triggered:', { user, userType, extension })
     
-    if (clientId) {
+    if (extension) {
       fetchRecordings()
     } else {
-      console.log('⚠️ No client ID available, setting loading to false')
+      console.log('⚠️ No extension available, setting loading to false')
       setLoading(false)
     }
   }, [user, selectedDate])

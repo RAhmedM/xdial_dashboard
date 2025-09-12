@@ -173,7 +173,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ 
       recordings: transformedRecordings,
       total: transformedRecordings.length,
-      client_name: client.client_name,
+      extension: extension,
       date: date,
       source: 'external_api',
       api_url: apiUrl.split('?')[0], // Don't expose parameters
