@@ -127,9 +127,9 @@ app.get('/api/info', (req, res) => {
     });
 });
 
-// Input validation middleware
+// Updated input validation middleware to include list_id
 const validateCallData = (req, res, next) => {
-    const { client_id, phone_number } = req.body;
+    const { client_id, phone_number, list_id } = req.body;
     
     if (!client_id || !phone_number) {
         return res.status(400).json({
@@ -148,11 +148,18 @@ const validateCallData = (req, res, next) => {
             error: 'phone_number must be a string with maximum 20 characters'
         });
     }
+
+    // Validate list_id if provided
+    if (list_id !== null && list_id !== undefined && (typeof list_id !== 'string' || list_id.length > 50)) {
+        return res.status(400).json({
+            error: 'list_id must be a string with maximum 50 characters'
+        });
+    }
     
     next();
 };
 
-// GET all calls (with pagination)
+// GET all calls (with pagination) - Updated to include list_id
 app.get('/api/calls', async (req, res) => {
     try {
         const page = parseInt(req.query.page) || 1;
@@ -165,8 +172,9 @@ app.get('/api/calls', async (req, res) => {
             const countResult = await client.query('SELECT COUNT(*) FROM calls');
             const totalCalls = parseInt(countResult.rows[0].count);
             
+            // Updated query to include list_id
             const result = await client.query(
-                'SELECT * FROM calls ORDER BY timestamp DESC LIMIT $1 OFFSET $2',
+                'SELECT call_id, client_id, phone_number, response_category, timestamp, recording_url, recording_length, list_id FROM calls ORDER BY timestamp DESC LIMIT $1 OFFSET $2',
                 [limit, offset]
             );
             
@@ -188,7 +196,7 @@ app.get('/api/calls', async (req, res) => {
     }
 });
 
-// GET call by ID
+// GET call by ID - Updated to include list_id
 app.get('/api/calls/:id', async (req, res) => {
     try {
         const callId = parseInt(req.params.id);
@@ -201,7 +209,7 @@ app.get('/api/calls/:id', async (req, res) => {
         
         try {
             const result = await client.query(
-                'SELECT * FROM calls WHERE call_id = $1',
+                'SELECT call_id, client_id, phone_number, response_category, timestamp, recording_url, recording_length, list_id FROM calls WHERE call_id = $1',
                 [callId]
             );
             
@@ -219,7 +227,7 @@ app.get('/api/calls/:id', async (req, res) => {
     }
 });
 
-// POST - Create new call
+// POST - Create new call - Updated to include list_id
 app.post('/api/calls', validateCallData, async (req, res) => {
     try {
         const {
@@ -227,7 +235,8 @@ app.post('/api/calls', validateCallData, async (req, res) => {
             phone_number,
             response_category,
             recording_url,
-            recording_length
+            recording_length,
+            list_id
         } = req.body;
         
         const client = await pool.connect();
@@ -242,11 +251,12 @@ app.post('/api/calls', validateCallData, async (req, res) => {
                 return res.status(400).json({ error: 'Client ID does not exist' });
             }
             
+            // Updated INSERT query to include list_id
             const result = await client.query(
-                `INSERT INTO calls (client_id, phone_number, response_category, recording_url, recording_length)
-                 VALUES ($1, $2, $3, $4, $5)
+                `INSERT INTO calls (client_id, phone_number, response_category, recording_url, recording_length, list_id)
+                 VALUES ($1, $2, $3, $4, $5, $6)
                  RETURNING *`,
-                [client_id, phone_number, response_category, recording_url, recording_length]
+                [client_id, phone_number, response_category, recording_url, recording_length, list_id]
             );
             
             res.status(201).json({
@@ -267,7 +277,7 @@ app.post('/api/calls', validateCallData, async (req, res) => {
     }
 });
 
-// POST - Batch create calls
+// POST - Batch create calls - Updated to include list_id
 app.post('/api/calls/batch', async (req, res) => {
     try {
         const { calls } = req.body;
@@ -289,6 +299,14 @@ app.post('/api/calls/batch', async (req, res) => {
                     error: `Call at index ${i}: Missing required fields client_id and phone_number`
                 });
             }
+            
+            // Validate list_id if provided
+            if (call.list_id !== null && call.list_id !== undefined && 
+                (typeof call.list_id !== 'string' || call.list_id.length > 50)) {
+                return res.status(400).json({
+                    error: `Call at index ${i}: list_id must be a string with maximum 50 characters`
+                });
+            }
         }
         
         const client = await pool.connect();
@@ -299,16 +317,18 @@ app.post('/api/calls/batch', async (req, res) => {
             const insertedCalls = [];
             
             for (const call of calls) {
+                // Updated INSERT query to include list_id
                 const result = await client.query(
-                    `INSERT INTO calls (client_id, phone_number, response_category, recording_url, recording_length)
-                     VALUES ($1, $2, $3, $4, $5)
+                    `INSERT INTO calls (client_id, phone_number, response_category, recording_url, recording_length, list_id)
+                     VALUES ($1, $2, $3, $4, $5, $6)
                      RETURNING *`,
                     [
                         call.client_id,
                         call.phone_number,
                         call.response_category,
                         call.recording_url,
-                        call.recording_length
+                        call.recording_length,
+                        call.list_id
                     ]
                 );
                 insertedCalls.push(result.rows[0]);
@@ -332,7 +352,7 @@ app.post('/api/calls/batch', async (req, res) => {
     }
 });
 
-// PUT - Update call by ID
+// PUT - Update call by ID - Updated to include list_id
 app.put('/api/calls/:id', validateCallData, async (req, res) => {
     try {
         const callId = parseInt(req.params.id);
@@ -346,19 +366,21 @@ app.put('/api/calls/:id', validateCallData, async (req, res) => {
             phone_number,
             response_category,
             recording_url,
-            recording_length
+            recording_length,
+            list_id
         } = req.body;
         
         const client = await pool.connect();
         
         try {
+            // Updated UPDATE query to include list_id
             const result = await client.query(
                 `UPDATE calls 
                  SET client_id = $1, phone_number = $2, response_category = $3, 
-                     recording_url = $4, recording_length = $5
-                 WHERE call_id = $6
+                     recording_url = $4, recording_length = $5, list_id = $6
+                 WHERE call_id = $7
                  RETURNING *`,
-                [client_id, phone_number, response_category, recording_url, recording_length, callId]
+                [client_id, phone_number, response_category, recording_url, recording_length, list_id, callId]
             );
             
             if (result.rows.length === 0) {

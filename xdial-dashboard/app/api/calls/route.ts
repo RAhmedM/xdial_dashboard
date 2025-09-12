@@ -8,94 +8,60 @@ const pool = new Pool({
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
-    const clientId = searchParams.get('client_id')
-    const responseCategory = searchParams.get('response_category')
-    const startDate = searchParams.get('start_date')
-    const endDate = searchParams.get('end_date')
-    const search = searchParams.get('search')
     const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '25')
-    const offset = (page - 1) * limit
-
-    // Get multiple response categories from the URL
+    const limit = parseInt(searchParams.get('limit') || '50')
+    const search = searchParams.get('search') || ''
+    const startDate = searchParams.get('start_date') || ''
+    const endDate = searchParams.get('end_date') || ''
+    const clientId = searchParams.get('client_id') || ''
     const responseCategories = searchParams.getAll('response_categories')
 
-    console.log('API Filters received:', {
-      clientId,
-      startDate,
-      endDate,
-      search,
-      responseCategories,
-      page,
-      limit
-    })
+    const offset = (page - 1) * limit
 
-    // Build WHERE conditions
-    const conditions: string[] = []
+    // Build dynamic WHERE conditions
+    const conditions = []
     const params: any[] = []
+    let paramCount = 0
 
-    // Add conditions dynamically
-    if (clientId) {
-      conditions.push(`c.client_id = $${params.length + 1}`)
-      params.push(clientId)
-    }
-
-    if (responseCategory) {
-      conditions.push(`c.response_category = $${params.length + 1}`)
-      params.push(responseCategory)
-    }
-
-    // Handle multiple response categories (from outcomes filter)
-    if (responseCategories.length > 0) {
-      // Map filter IDs to actual database values
-      // Map filter IDs to actual database values
-const categoryMapping: { [key: string]: string[] } = {
-  'answering-machine': ['Answering_Machine'],
-  'interested': ['Interested'],
-  'not-interested': ['Not_Interested'],
-  'do-not-call': ['DNC'],
-  'do-not-qualify': ['DNQ'],
-  'unknown': ['Unknown']
-}
-
-      const dbCategories: string[] = []
-      responseCategories.forEach(category => {
-        if (categoryMapping[category]) {
-          dbCategories.push(...categoryMapping[category])
-        }
-      })
-
-      if (dbCategories.length > 0) {
-        const placeholders = dbCategories.map((_, index) => `$${params.length + index + 1}`).join(', ')
-        conditions.push(`c.response_category IN (${placeholders})`)
-        params.push(...dbCategories)
-      }
-    }
-
-    // Handle date filtering - dates from frontend are already converted to US timezone
-    if (startDate) {
-      // Convert ISO string to timestamp for comparison with database (which stores US timezone)
-      const startDateObj = new Date(startDate)
-      conditions.push(`c.timestamp >= $${params.length + 1}`)
-      params.push(startDateObj.toISOString())
-      console.log('Added start date filter (US timezone):', startDateObj.toISOString())
-    }
-
-    if (endDate) {
-      // Convert ISO string to timestamp for comparison with database (which stores US timezone)  
-      const endDateObj = new Date(endDate)
-      conditions.push(`c.timestamp <= $${params.length + 1}`)
-      params.push(endDateObj.toISOString())
-      console.log('Added end date filter (US timezone):', endDateObj.toISOString())
-    }
-
+    // Search filter (phone number, response category, or list_id)
     if (search) {
-      conditions.push(`c.phone_number ILIKE $${params.length + 1}`)
+      paramCount++
+      conditions.push(`(c.phone_number ILIKE $${paramCount} OR c.response_category ILIKE $${paramCount} OR c.list_id ILIKE $${paramCount})`)
       params.push(`%${search}%`)
     }
 
-    // Build WHERE clause
-    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
+    // Date range filters
+    if (startDate) {
+      paramCount++
+      conditions.push(`c.timestamp >= $${paramCount}`)
+      params.push(startDate)
+    }
+
+    if (endDate) {
+      paramCount++
+      conditions.push(`c.timestamp <= $${paramCount}`)
+      params.push(endDate)
+    }
+
+    // Client ID filter
+    if (clientId) {
+      paramCount++
+      conditions.push(`c.client_id = $${paramCount}`)
+      params.push(parseInt(clientId))
+    }
+
+    // Response categories filter
+    if (responseCategories.length > 0) {
+      const categoryPlaceholders = responseCategories.map(() => {
+        paramCount++
+        return `$${paramCount}`
+      }).join(',')
+      conditions.push(`c.response_category IN (${categoryPlaceholders})`)
+      params.push(...responseCategories)
+    }
+
+    const whereClause = conditions.length > 0 ? 
+        `WHERE ${conditions.join(' AND ')}` : ''
 
     // First, get total count
     const countQuery = `
@@ -111,7 +77,7 @@ const categoryMapping: { [key: string]: string[] } = {
     const countResult = await pool.query(countQuery, params)
     const total = parseInt(countResult.rows[0].total)
 
-    // Then get the actual data with pagination
+    // Then get the actual data with pagination - Updated to include list_id
     const dataQuery = `
       SELECT 
         c.call_id,
@@ -121,6 +87,7 @@ const categoryMapping: { [key: string]: string[] } = {
         c.timestamp,
         c.recording_url,
         c.recording_length,
+        c.list_id,
         COALESCE(cl.client_name, 'Unknown Client') as client_name
       FROM calls c 
       LEFT JOIN clients cl ON c.client_id = cl.client_id 
@@ -168,12 +135,14 @@ const categoryMapping: { [key: string]: string[] } = {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { client_id, phone_number, response_category, recording_url, recording_length } = body
+    // Updated to include list_id
+    const { client_id, phone_number, response_category, recording_url, recording_length, list_id } = body
 
+    // Updated INSERT query to include list_id
     const result = await pool.query(
-      `INSERT INTO calls (client_id, phone_number, response_category, recording_url, recording_length) 
-       VALUES ($1, $2, $3, $4, $5) RETURNING *`,
-      [client_id, phone_number, response_category, recording_url, recording_length]
+      `INSERT INTO calls (client_id, phone_number, response_category, recording_url, recording_length, list_id) 
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [client_id, phone_number, response_category, recording_url, recording_length, list_id]
     )
 
     return NextResponse.json(result.rows[0], { status: 201 })
