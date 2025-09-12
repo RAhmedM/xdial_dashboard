@@ -30,13 +30,13 @@ interface User {
   username: string
   role: string
   name: string
-  client_id?: number
+  extension?: string
 }
 
 interface ApiResponse {
   recordings: Recording[]
   total: number
-  client_name?: string
+  extension?: string
   date?: string
   warning?: string
   source?: string
@@ -57,7 +57,6 @@ export default function RecordingsPage() {
   const [userType, setUserType] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [warning, setWarning] = useState<string | null>(null)
-  const [clientName, setClientName] = useState<string>('')
   const [sortField, setSortField] = useState<SortField>('timestamp')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
 
@@ -78,30 +77,29 @@ export default function RecordingsPage() {
 
   // Fetch recordings
   const fetchRecordings = async () => {
-    // Try both client_id and id properties since they might be stored differently
-    const clientId = user?.client_id || user?.id
+    const extension = user?.extension
     
-    console.log('🎬 Recordings fetch attempt:', { 
+    console.log('Recordings fetch attempt:', { 
       user, 
       userType, 
-      clientId, 
+      extension, 
       selectedDate 
     })
     
-    if (!clientId) {
-      console.log('❌ No client ID found, not fetching recordings')
+    if (!extension) {
+      console.log('No extension found, not fetching recordings')
       setLoading(false)
       return
     }
 
-    console.log('🚀 Starting recordings fetch...')
+    console.log('Starting recordings fetch...')
     setLoading(true)
     setError(null)
     setWarning(null)
     
     try {
-      const url = `/api/recordings?client_id=${clientId}&date=${selectedDate}`
-      console.log('📞 Fetching recordings from:', url)
+      const url = `/api/recordings?extension=${extension}&date=${selectedDate}`
+      console.log('Fetching recordings from:', url)
       
       const response = await fetch(url)
       
@@ -111,11 +109,10 @@ export default function RecordingsPage() {
         throw new Error(data.error || 'Failed to fetch recordings')
       }
       
-      console.log('✅ Recordings received:', data)
+      console.log('Recordings received:', data)
       
       setRecordings(data.recordings || [])
       setFilteredRecordings(data.recordings || [])
-      setClientName(data.client_name || '')
       
       // Show warning if there's one
       if (data.warning) {
@@ -123,7 +120,7 @@ export default function RecordingsPage() {
       }
       
     } catch (error) {
-      console.error('💥 Error fetching recordings:', error)
+      console.error('Error fetching recordings:', error)
       setError(error instanceof Error ? error.message : 'Failed to load recordings')
       setRecordings([])
       setFilteredRecordings([])
@@ -134,12 +131,12 @@ export default function RecordingsPage() {
 
   useEffect(() => {
     const extension = user?.extension
-    console.log('🔄 Recordings useEffect triggered:', { user, userType, extension })
+    console.log('Recordings useEffect triggered:', { user, userType, extension })
     
     if (extension) {
       fetchRecordings()
     } else {
-      console.log('⚠️ No extension available, setting loading to false')
+      console.log('No extension available, setting loading to false')
       setLoading(false)
     }
   }, [user, selectedDate])
@@ -343,7 +340,7 @@ export default function RecordingsPage() {
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
               <FileAudio className="h-6 w-6 text-blue-500" />
               Call Recordings
-              {clientName && <span className="text-lg font-normal text-gray-600">- {clientName}</span>}
+              {user?.extension && <span className="text-lg font-normal text-gray-600">- Extension {user.extension}</span>}
             </h1>
             <p className="text-gray-600 mt-1">
               Listen to and download your call recordings
