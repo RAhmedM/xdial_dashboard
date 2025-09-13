@@ -13,38 +13,48 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('start_date')
     const endDate = searchParams.get('end_date')
     const search = searchParams.get('search')
+    const listIdSearch = searchParams.get('list_id_search')
 
-    console.log('Stats API filters:', { clientId, startDate, endDate, search })
+    console.log('Stats API filters:', { clientId, startDate, endDate, search, listIdSearch })
 
     // Build WHERE clause for client and date/time filtering
     const conditions: string[] = []
     const params: any[] = []
+    let paramCount = 0
     
     if (clientId) {
-      conditions.push(`client_id = $${params.length + 1}`)
+      paramCount++
+      conditions.push(`client_id = $${paramCount}`)
       params.push(clientId)
     }
 
-    // Handle date filtering - dates from frontend are already converted to US timezone
+    // Handle date filtering without timezone conversion - use as-is
     if (startDate) {
-      // Convert ISO string to timestamp for comparison with database (which stores US timezone)
-      const startDateObj = new Date(startDate)
-      conditions.push(`timestamp >= ${params.length + 1}`)
-      params.push(startDateObj.toISOString())
-      console.log('Stats: Added start date filter (US timezone):', startDateObj.toISOString())
+      paramCount++
+      conditions.push(`timestamp >= $${paramCount}`)
+      params.push(startDate)
+      console.log('Stats: Added start date filter:', startDate)
     }
 
     if (endDate) {
-      // Convert ISO string to timestamp for comparison with database (which stores US timezone)
-      const endDateObj = new Date(endDate)
-      conditions.push(`timestamp <= ${params.length + 1}`)
-      params.push(endDateObj.toISOString())
-      console.log('Stats: Added end date filter (US timezone):', endDateObj.toISOString())
+      paramCount++
+      conditions.push(`timestamp <= $${paramCount}`)
+      params.push(endDate)
+      console.log('Stats: Added end date filter:', endDate)
     }
 
+    // General search (phone number or response category)
     if (search) {
-      conditions.push(`phone_number ILIKE $${params.length + 1}`)
+      paramCount++
+      conditions.push(`(phone_number ILIKE $${paramCount} OR response_category ILIKE $${paramCount})`)
       params.push(`%${search}%`)
+    }
+
+    // Separate List ID search
+    if (listIdSearch) {
+      paramCount++
+      conditions.push(`list_id ILIKE $${paramCount}`)
+      params.push(`%${listIdSearch}%`)
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''

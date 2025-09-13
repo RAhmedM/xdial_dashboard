@@ -13,38 +13,48 @@ export async function GET(request: NextRequest) {
     const startDate = searchParams.get('start_date')
     const endDate = searchParams.get('end_date')
     const search = searchParams.get('search')
+    const listIdSearch = searchParams.get('list_id_search')
 
-    console.log('Outcome counts filters:', { clientId, startDate, endDate, search })
+    console.log('Outcome counts filters:', { clientId, startDate, endDate, search, listIdSearch })
 
-    // Build WHERE conditions (same as calls API but without outcome filtering)
+    // Build WHERE conditions
     const conditions: string[] = []
     const params: any[] = []
+    let paramCount = 0
 
     if (clientId) {
-      conditions.push(`c.client_id = $${params.length + 1}`)
+      paramCount++
+      conditions.push(`c.client_id = $${paramCount}`)
       params.push(clientId)
     }
 
-    // Handle date filtering - dates from frontend are already converted to US timezone
+    // Handle date filtering without timezone conversion - use as-is
     if (startDate) {
-      // Convert ISO string to timestamp for comparison with database (which stores US timezone)
-      const startDateObj = new Date(startDate)
-      conditions.push(`c.timestamp >= ${params.length + 1}`)
-      params.push(startDateObj.toISOString())
-      console.log('Outcome counts: Added start date filter (US timezone):', startDateObj.toISOString())
+      paramCount++
+      conditions.push(`c.timestamp >= $${paramCount}`)
+      params.push(startDate)
+      console.log('Outcome counts: Added start date filter:', startDate)
     }
 
     if (endDate) {
-      // Convert ISO string to timestamp for comparison with database (which stores US timezone)
-      const endDateObj = new Date(endDate)
-      conditions.push(`c.timestamp <= ${params.length + 1}`)
-      params.push(endDateObj.toISOString())
-      console.log('Outcome counts: Added end date filter (US timezone):', endDateObj.toISOString())
+      paramCount++
+      conditions.push(`c.timestamp <= $${paramCount}`)
+      params.push(endDate)
+      console.log('Outcome counts: Added end date filter:', endDate)
     }
 
+    // General search (phone number or response category)
     if (search) {
-      conditions.push(`c.phone_number ILIKE $${params.length + 1}`)
+      paramCount++
+      conditions.push(`(c.phone_number ILIKE $${paramCount} OR c.response_category ILIKE $${paramCount})`)
       params.push(`%${search}%`)
+    }
+
+    // Separate List ID search
+    if (listIdSearch) {
+      paramCount++
+      conditions.push(`c.list_id ILIKE $${paramCount}`)
+      params.push(`%${listIdSearch}%`)
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''
@@ -66,15 +76,14 @@ export async function GET(request: NextRequest) {
     const result = await pool.query(query, params)
 
     // Map database categories to filter categories
-    // Map database categories to filter categories
-const categoryMapping: { [key: string]: string } = {
-  'Answering_Machine': 'answering-machine',
-  'Interested': 'interested',
-  'Not_Interested': 'not-interested',
-  'DNC': 'do-not-call',
-  'DNQ': 'do-not-qualify',
-  'Unknown': 'unknown'
-}
+    const categoryMapping: { [key: string]: string } = {
+      'Answering_Machine': 'answering-machine',
+      'Interested': 'interested',
+      'Not_Interested': 'not-interested',
+      'DNC': 'do-not-call',
+      'DNQ': 'do-not-qualify',
+      'Unknown': 'unknown'
+    }
 
     // Aggregate counts by filter category
     const outcomeCounts: { [key: string]: number } = {
