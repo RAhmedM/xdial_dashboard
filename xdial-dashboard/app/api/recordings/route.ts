@@ -115,9 +115,13 @@ export async function GET(request: NextRequest) {
       }, { status: 500 })
     }
 
-    // Transform recordings to our format
+    // Transform recordings to our format with proxy URLs
     console.log('🔄 Transforming recordings data...')
     const transformedRecordings = Object.entries(recordings).map(([key, rec]: [string, any]) => {
+      // Create proxy URL for the audio file
+      const originalUrl = rec.url || ''
+      const proxyUrl = originalUrl ? `/api/audio?url=${encodeURIComponent(originalUrl)}` : ''
+      
       const transformed = {
         id: key,
         unique_id: `${rec.date}-${rec.time}_${rec.number}`,
@@ -126,12 +130,15 @@ export async function GET(request: NextRequest) {
         phone_number: rec.number || 'Unknown',
         response_category: 'EXTERNAL_RECORDING',
         speech_text: '',
-        audio_url: rec.url || '',
+        audio_url: proxyUrl, // Use proxy URL instead of direct URL
+        original_url: originalUrl, // Keep original URL for reference
         size: rec.size || '',
         filename: rec.name || ''
       }
       
       console.log(`   Transformed recording ${key}: ${rec.number} at ${rec.date} ${rec.time}`)
+      console.log(`     - Original URL: ${originalUrl}`)
+      console.log(`     - Proxy URL: ${proxyUrl}`)
       return transformed
     })
 

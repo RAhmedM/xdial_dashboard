@@ -16,6 +16,7 @@ interface Recording {
   timestamp: string
   duration: string
   phone_number: string
+  original_url?: string
   response_category: string
   speech_text: string
   audio_url: string
@@ -209,18 +210,26 @@ export default function RecordingsPage() {
 
   const handleDownload = async (recording: Recording) => {
     try {
+      // Use the proxy URL for download instead of the direct URL
+      const downloadUrl = recording.audio_url
+      
+      if (!downloadUrl) {
+        setError("No audio URL available for download")
+        return
+      }
+      
       // Create a temporary anchor element for download
-      const link = document.createElement('a')
-      link.href = recording.audio_url
-      link.download = recording.filename || `recording_${recording.phone_number}_${recording.timestamp.replace(/[: ]/g, '-')}.wav`
-      link.target = '_blank'
+      const link = document.createElement("a")
+      link.href = downloadUrl
+      link.download = recording.filename || `recording_${recording.phone_number}_${recording.timestamp.replace(/[: ]/g, "-")}.wav`
+      link.target = "_blank"
       
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
     } catch (error) {
-      console.error('Error downloading recording:', error)
-      setError('Failed to download recording. The file might not be accessible.')
+      console.error("Error downloading recording:", error)
+      setError("Failed to download recording. Please try again.")
     }
   }
 
