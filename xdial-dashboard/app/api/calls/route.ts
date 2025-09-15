@@ -11,13 +11,10 @@ export async function GET(request: NextRequest) {
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '50')
     const search = searchParams.get('search') || ''
-    const listIdSearch = searchParams.get('list_id_search') || ''
     const startDate = searchParams.get('start_date') || ''
     const endDate = searchParams.get('end_date') || ''
     const clientId = searchParams.get('client_id') || ''
     const responseCategories = searchParams.getAll('response_categories')
-    const sortField = searchParams.get('sort_field') || 'timestamp'
-    const sortDirection = searchParams.get('sort_direction') || 'desc'
 
     const offset = (page - 1) * limit
 
@@ -26,21 +23,14 @@ export async function GET(request: NextRequest) {
     const params: any[] = []
     let paramCount = 0
 
-    // General search filter (phone number or response category)
+    // Search filter (phone number, response category, or list_id)
     if (search) {
       paramCount++
-      conditions.push(`(c.phone_number ILIKE $${paramCount} OR c.response_category ILIKE $${paramCount})`)
+      conditions.push(`(c.phone_number ILIKE $${paramCount} OR c.response_category ILIKE $${paramCount} OR c.list_id ILIKE $${paramCount})`)
       params.push(`%${search}%`)
     }
 
-    // Separate List ID search
-    if (listIdSearch) {
-      paramCount++
-      conditions.push(`c.list_id ILIKE $${paramCount}`)
-      params.push(`%${listIdSearch}%`)
-    }
-
-    // Date range filters (no timezone conversion - use as-is)
+    // Date range filters
     if (startDate) {
       paramCount++
       conditions.push(`c.timestamp >= $${paramCount}`)
@@ -73,11 +63,6 @@ export async function GET(request: NextRequest) {
     const whereClause = conditions.length > 0 ? 
         `WHERE ${conditions.join(' AND ')}` : ''
 
-    // Validate sort field to prevent SQL injection
-    const validSortFields = ['call_id', 'phone_number', 'list_id', 'response_category', 'timestamp']
-    const safeSortField = validSortFields.includes(sortField) ? sortField : 'timestamp'
-    const safeSortDirection = sortDirection.toLowerCase() === 'asc' ? 'ASC' : 'DESC'
-
     // First, get total count
     const countQuery = `
       SELECT COUNT(*) as total
@@ -92,7 +77,7 @@ export async function GET(request: NextRequest) {
     const countResult = await pool.query(countQuery, params)
     const total = parseInt(countResult.rows[0].total)
 
-    // Then get the actual data with pagination and sorting
+    // Then get the actual data with pagination - Updated to include list_id
     const dataQuery = `
       SELECT 
         c.call_id,
@@ -107,7 +92,7 @@ export async function GET(request: NextRequest) {
       FROM calls c 
       LEFT JOIN clients cl ON c.client_id = cl.client_id 
       ${whereClause}
-      ORDER BY c.${safeSortField} ${safeSortDirection}
+      ORDER BY c.timestamp DESC
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `
 
@@ -121,8 +106,7 @@ export async function GET(request: NextRequest) {
     console.log('Query results:', {
       totalRows: total,
       returnedRows: result.rows.length,
-      filters: { startDate, endDate, clientId, responseCategories, search, listIdSearch },
-      sorting: { sortField: safeSortField, sortDirection: safeSortDirection },
+      filters: { startDate, endDate, clientId, responseCategories },
       sampleTimestamps: result.rows.slice(0, 3).map(row => row.timestamp)
     })
 
@@ -151,8 +135,10 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
+    // Updated to include list_id
     const { client_id, phone_number, response_category, recording_url, recording_length, list_id } = body
 
+    // Updated INSERT query to include list_id
     const result = await pool.query(
       `INSERT INTO calls (client_id, phone_number, response_category, recording_url, recording_length, list_id) 
        VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,

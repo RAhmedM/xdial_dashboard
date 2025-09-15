@@ -147,7 +147,7 @@ export default function DashboardPage() {
     if (typeof window !== 'undefined') {
       const storedUser = sessionStorage.getItem('user')
       const storedUserType = sessionStorage.getItem('userType')
-
+      
       if (storedUser) {
         setUser(JSON.parse(storedUser))
       }
@@ -165,11 +165,11 @@ export default function DashboardPage() {
   // Format timestamp based on selected timezone
   const formatTimestamp = (timestamp: string) => {
     if (!timestamp) return 'N/A'
-
+    
     try {
       const date = new Date(timestamp)
       const timezone = TIMEZONES[selectedTimezone]
-
+      
       const usTime = date.toLocaleString('en-US', {
         timeZone: 'America/New_York',
         year: 'numeric',
@@ -179,7 +179,7 @@ export default function DashboardPage() {
         minute: '2-digit',
         timeZoneName: 'short'
       })
-
+      
       const pakistanTime = date.toLocaleString('en-US', {
         timeZone: 'Asia/Karachi',
         year: 'numeric',
@@ -189,7 +189,7 @@ export default function DashboardPage() {
         minute: '2-digit',
         timeZoneName: 'short'
       })
-
+      
       return `${usTime} (Pakistan: ${pakistanTime})`
     } catch (error) {
       console.error('Error formatting timestamp:', error)
@@ -200,7 +200,7 @@ export default function DashboardPage() {
   // Helper function to format date for API
   const formatDateForAPI = (date: string, time: string, isEndOfDay: boolean = false) => {
     if (!date) return null
-
+    
     try {
       let timeToUse = time
       if (!timeToUse) {
@@ -208,28 +208,28 @@ export default function DashboardPage() {
       } else if (timeToUse.length === 5) {
         timeToUse += isEndOfDay ? ':59' : ':00'
       }
-
+      
       const dateTimeString = `${date}T${timeToUse}`
       const dateTime = new Date(dateTimeString)
-
+      
       if (isNaN(dateTime.getTime())) {
         console.error('Invalid date:', dateTimeString)
         return null
       }
-
+      
       const usTime = dateTime.toLocaleString('en-US', {
         timeZone: 'America/New_York',
         year: 'numeric',
-        month: '2-digit',
+        month: '2-digit', 
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
         hour12: false
       })
-
+      
       const pakistanTime = dateTime.toLocaleString('en-US', {
-        timeZone: 'Asia/Karachi',
+        timeZone: 'Asia/Karachi', 
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
@@ -238,7 +238,7 @@ export default function DashboardPage() {
         second: '2-digit',
         hour12: false
       })
-
+      
       return `${usTime} (Pakistan: ${pakistanTime})`
     }
     catch (error) {
@@ -384,7 +384,7 @@ export default function DashboardPage() {
   const handleOutcomeToggle = (outcomeId: string, checked: boolean) => {
     setFilters(prev => ({
       ...prev,
-      selectedOutcomes: checked
+      selectedOutcomes: checked 
         ? [...prev.selectedOutcomes, outcomeId]
         : prev.selectedOutcomes.filter(id => id !== outcomeId)
     }))
@@ -403,7 +403,7 @@ export default function DashboardPage() {
     <AuthWrapper>
       <div className="min-h-screen bg-gray-50">
         <DashboardHeader />
-
+        
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Filter Section */}
           <Card className="mb-6">
@@ -485,7 +485,7 @@ export default function DashboardPage() {
                       <Checkbox
                         id={outcome.id}
                         checked={filters.selectedOutcomes.includes(outcome.id)}
-                        onCheckedChange={(checked) =>
+                        onCheckedChange={(checked) => 
                           handleOutcomeToggle(outcome.id, checked as boolean)
                         }
                       />
@@ -516,11 +516,25 @@ export default function DashboardPage() {
                   <Phone className="h-5 w-5" />
                   Call Records ({pagination.total} total)
                 </CardTitle>
-                {pagination.total > 0 && (
-                  <div className="text-sm text-gray-500">
-                    Sorted by {sortField.replace('_', ' ')} ({sortDirection === 'asc' ? 'ascending' : 'descending'})
-                  </div>
-                )}
+                <Select value={selectedTimezone} onValueChange={setSelectedTimezone}>
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PAKISTAN">
+                      <div className="flex items-center gap-2">
+                        <Globe className="h-4 w-4" />
+                        Pakistan Time
+                      </div>
+                    </SelectItem>
+                    <SelectItem value="USA">
+                      <div className="flex items-center gap-2">
+                        <Globe className="h-4 w-4" />
+                        US Eastern
+                      </div>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </CardHeader>
             <CardContent>
@@ -531,52 +545,43 @@ export default function DashboardPage() {
               ) : (
                 <>
                   <div className="overflow-x-auto">
-                    <table className="w-full group">
+                    <table className="w-full">
                       <thead>
                         <tr className="border-b border-gray-200">
-                          <SortableHeader field="call_id">#</SortableHeader>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">#</th>
                           {userType === 'admin' && (
                             <th className="text-left py-3 px-4 font-medium text-gray-700">Client</th>
                           )}
-                          <SortableHeader field="phone_number">Phone Number</SortableHeader>
-                          <SortableHeader field="list_id">List ID</SortableHeader>
-                          <SortableHeader field="response_category">Response Category</SortableHeader>
-                          <SortableHeader field="timestamp">Timestamp</SortableHeader>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Phone No</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">List ID</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Response Category</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">
+                            Timestamp ({selectedTimezone === 'USA' ? 'US Eastern' : 'Pakistan'})
+                          </th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Action</th>
                         </tr>
                       </thead>
                       <tbody>
                         {calls.map((call) => (
-                          <tr key={call.call_id} className="border-b border-gray-100 hover:bg-gray-50 transition-colors">
-                            <td className="py-3 px-4 text-sm text-gray-900 font-medium">{call.call_id}</td>
+                          <tr key={call.call_id} className="border-b border-gray-100 hover:bg-gray-50">
+                            <td className="py-3 px-4 text-sm text-gray-900">{call.call_id}</td>
                             {userType === 'admin' && (
                               <td className="py-3 px-4 text-sm text-gray-900">{call.client_name}</td>
                             )}
-                            <td className="py-3 px-4 text-sm text-gray-900 font-medium">{call.phone_number}</td>
-                            <td className="py-3 px-4 text-sm text-gray-600">
-                              {call.list_id ? (
-                                <Badge variant="outline" className="font-mono text-xs">
-                                  {call.list_id}
-                                </Badge>
-                              ) : (
-                                <span className="text-gray-400">N/A</span>
-                              )}
-                            </td>
+                            <td className="py-3 px-4 text-sm text-gray-900">{call.phone_number}</td>
+                            <td className="py-3 px-4 text-sm text-gray-600">{call.list_id || 'N/A'}</td>
                             <td className="py-3 px-4">
-                              <Badge className={`${getCategoryColor(call.response_category)} text-white text-xs px-2 py-1`}>
+                              <Badge className={`${getCategoryColor(call.response_category)} text-white`}>
                                 {call.response_category}
                               </Badge>
                             </td>
-                            <td className="py-3 px-4 text-sm text-gray-600 font-mono">
-                              {formatTimestamp(call.timestamp)}
-                            </td>
+                            <td className="py-3 px-4 text-sm text-gray-600">{formatTimestamp(call.timestamp)}</td>
                             <td className="py-3 px-4">
                               <Button
                                 variant="ghost"
                                 size="sm"
                                 onClick={() => handlePlayRecording(call.recording_url)}
                                 disabled={!call.recording_url}
-                                className="hover:bg-blue-50 hover:text-blue-600 transition-colors"
                               >
                                 <Play className="h-4 w-4" />
                               </Button>
@@ -587,15 +592,11 @@ export default function DashboardPage() {
                     </table>
 
                     {calls.length === 0 && (
-                      <div className="text-center py-12 text-gray-500">
-                        <Phone className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                        <h3 className="text-lg font-medium text-gray-900 mb-2">No call records found</h3>
-                        <p className="text-gray-500">
-                          {userType === 'client'
-                            ? "No call records match your current filters."
-                            : "Try adjusting your search criteria or date range."
-                          }
-                        </p>
+                      <div className="text-center py-8 text-gray-500">
+                        {userType === 'client' 
+                          ? "No call records found for your account." 
+                          : "No call records found."
+                        }
                       </div>
                     )}
                   </div>
@@ -604,7 +605,7 @@ export default function DashboardPage() {
                   {pagination.totalPages > 1 && (
                     <div className="mt-6 flex items-center justify-between">
                       <div className="text-sm text-gray-700">
-                        Showing page {pagination.page} of {pagination.totalPages}
+                        Showing page {pagination.page} of {pagination.totalPages} 
                         ({pagination.total} total records)
                       </div>
                       <div className="flex items-center gap-2">
@@ -617,12 +618,12 @@ export default function DashboardPage() {
                           <ChevronLeft className="h-4 w-4" />
                           Previous
                         </Button>
-
+                        
                         <div className="flex items-center gap-1">
                           {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
                             const pageNum = Math.max(1, pagination.page - 2) + i
                             if (pageNum > pagination.totalPages) return null
-
+                            
                             return (
                               <Button
                                 key={pageNum}
@@ -653,7 +654,7 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </main>
-
+        
         <Toaster />
       </div>
     </AuthWrapper>
