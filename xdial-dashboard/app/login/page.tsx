@@ -180,45 +180,6 @@ export default function LoginPage() {
               )}
             </Button>
           </form>
-
-          {/* Demo/Quick Login Section */}
-          <div className="space-y-3">
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <span className="w-full border-t border-gray-200" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-white px-2 text-gray-500">Quick Access</span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleDemoLogin('admin')}
-                className="text-sm"
-              >
-                Admin Demo
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => handleDemoLogin('client')}
-                className="text-sm"
-              >
-                Client Demo
-              </Button>
-            </div>
-          </div>
-
-          {/* Admin Credentials Info */}
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <p className="text-xs text-gray-600 text-center">
-              <strong>Admin:</strong> admin / admin123<br />
-              <strong>Client:</strong> Use your registered credentials
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>
