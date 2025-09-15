@@ -10,9 +10,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Checkbox } from "@/components/ui/checkbox"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
-  Calendar,
   RotateCcw,
   Search,
   Play,
@@ -24,29 +22,21 @@ import {
   Ban,
   AlertTriangle,
   HelpCircle,
-  PhoneForwarded,
-  PhoneOff,
-  Globe
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { DebugFilter } from "@/components/debug-filter"
 
 interface FilterState {
   search: string
+  listIdSearch: string
   startDate: string
   endDate: string
   startTime: string
   endTime: string
   selectedOutcomes: string[]
 }
-
-// Timezone constants
-const TIMEZONES = {
-  PAKISTAN: 'Asia/Karachi',
-  USA: 'America/New_York'
-} as const
-
-type TimezoneKey = keyof typeof TIMEZONES
 
 interface Call {
   call_id: number
@@ -56,7 +46,7 @@ interface Call {
   timestamp: string
   recording_url: string
   recording_length: number
-  list_id: string | null  // Added List_id field
+  list_id: string | null
   client_name: string
 }
 
@@ -68,16 +58,12 @@ interface User {
   extension?: string
 }
 
-interface CallStats {
-  totalCalls: number
-  callsForwarded: number
-  callsDropped: number
-  categories: Array<{ name: string; count: number }>
-}
-
 interface OutcomeCounts {
   [key: string]: number
 }
+
+type SortField = 'call_id' | 'phone_number' | 'list_id' | 'response_category' | 'timestamp' | 'client_name'
+type SortDirection = 'asc' | 'desc'
 
 const callOutcomes = [
   {
@@ -118,13 +104,20 @@ const callOutcomes = [
   },
 ]
 
+// Get today's date in YYYY-MM-DD format
+const getTodaysDate = () => {
+  const today = new Date()
+  return today.toISOString().split('T')[0]
+}
+
 export default function DashboardPage() {
   const [filters, setFilters] = useState<FilterState>({
     search: "",
-    startDate: "",
+    listIdSearch: "",
+    startDate: getTodaysDate(), // Default to today's date
     endDate: "",
-    startTime: "",
-    endTime: "",
+    startTime: "", // Empty by default
+    endTime: "", // Empty by default
     selectedOutcomes: [],
   })
 
@@ -138,8 +131,10 @@ export default function DashboardPage() {
     total: 0,
     totalPages: 0,
   })
-  const [selectedTimezone, setSelectedTimezone] = useState<TimezoneKey>('PAKISTAN')
   const [outcomeCounts, setOutcomeCounts] = useState<OutcomeCounts>({})
+  const [sortField, setSortField] = useState<SortField>('timestamp')
+  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+  const [selectAllOutcomes, setSelectAllOutcomes] = useState(false)
 
   const { toast } = useToast()
 
@@ -160,90 +155,25 @@ export default function DashboardPage() {
   useEffect(() => {
     fetchCalls()
     fetchOutcomeCounts()
-  }, [filters, pagination.page, pagination.limit])
+  }, [filters, pagination.page, pagination.limit, sortField, sortDirection])
 
-  // Format timestamp based on selected timezone
+  // Format timestamp - just display as is without timezone adjustments
   const formatTimestamp = (timestamp: string) => {
     if (!timestamp) return 'N/A'
     
     try {
       const date = new Date(timestamp)
-      const timezone = TIMEZONES[selectedTimezone]
-      
-      const usTime = date.toLocaleString('en-US', {
-        timeZone: 'America/New_York',
+      return date.toLocaleString('en-US', {
         year: 'numeric',
         month: '2-digit',
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
-        timeZoneName: 'short'
+        second: '2-digit',
       })
-      
-      const pakistanTime = date.toLocaleString('en-US', {
-        timeZone: 'Asia/Karachi',
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        timeZoneName: 'short'
-      })
-      
-      return `${usTime} (Pakistan: ${pakistanTime})`
     } catch (error) {
       console.error('Error formatting timestamp:', error)
       return timestamp
-    }
-  }
-
-  // Helper function to format date for API
-  const formatDateForAPI = (date: string, time: string, isEndOfDay: boolean = false) => {
-    if (!date) return null
-    
-    try {
-      let timeToUse = time
-      if (!timeToUse) {
-        timeToUse = isEndOfDay ? '23:59:59' : '00:00:00'
-      } else if (timeToUse.length === 5) {
-        timeToUse += isEndOfDay ? ':59' : ':00'
-      }
-      
-      const dateTimeString = `${date}T${timeToUse}`
-      const dateTime = new Date(dateTimeString)
-      
-      if (isNaN(dateTime.getTime())) {
-        console.error('Invalid date:', dateTimeString)
-        return null
-      }
-      
-      const usTime = dateTime.toLocaleString('en-US', {
-        timeZone: 'America/New_York',
-        year: 'numeric',
-        month: '2-digit', 
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      })
-      
-      const pakistanTime = dateTime.toLocaleString('en-US', {
-        timeZone: 'Asia/Karachi', 
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: false
-      })
-      
-      return `${usTime} (Pakistan: ${pakistanTime})`
-    }
-    catch (error) {
-      console.error('Error formatting date for API:', error, { date, time })
-      return null
     }
   }
 
@@ -255,19 +185,23 @@ export default function DashboardPage() {
       params.append('search', filters.search)
     }
 
-    // Add date range filters with proper timezone handling
+    if (filters.listIdSearch) {
+      params.append('list_id_search', filters.listIdSearch)
+    }
+
+    // Add date range filters - no timezone adjustments
     if (filters.startDate) {
-      const formattedStartDate = formatDateForAPI(filters.startDate, filters.startTime, false)
-      if (formattedStartDate) {
-        params.append('start_date', formattedStartDate)
-      }
+      const startDateTime = filters.startTime 
+        ? `${filters.startDate}T${filters.startTime}:00`
+        : `${filters.startDate}T00:00:00`
+      params.append('start_date', startDateTime)
     }
 
     if (filters.endDate) {
-      const formattedEndDate = formatDateForAPI(filters.endDate, filters.endTime, true)
-      if (formattedEndDate) {
-        params.append('end_date', formattedEndDate)
-      }
+      const endDateTime = filters.endTime 
+        ? `${filters.endDate}T${filters.endTime}:59`
+        : `${filters.endDate}T23:59:59`
+      params.append('end_date', endDateTime)
     }
 
     // Add outcome filters (only for calls, not for outcome counts)
@@ -281,6 +215,10 @@ export default function DashboardPage() {
     if (userType === 'client' && user?.id) {
       params.append('client_id', user.id.toString())
     }
+
+    // Add sorting
+    params.append('sort_field', sortField)
+    params.append('sort_direction', sortDirection)
 
     return params
   }
@@ -333,13 +271,15 @@ export default function DashboardPage() {
   const resetFilters = () => {
     setFilters({
       search: "",
-      startDate: "",
+      listIdSearch: "",
+      startDate: getTodaysDate(),
       endDate: "",
       startTime: "",
       endTime: "",
       selectedOutcomes: [],
     })
     setPagination(prev => ({ ...prev, page: 1 }))
+    setSelectAllOutcomes(false)
   }
 
   const handlePlayRecording = (recordingUrl: string) => {
@@ -391,6 +331,42 @@ export default function DashboardPage() {
     setPagination(prev => ({ ...prev, page: 1 }))
   }
 
+  const handleSelectAllOutcomes = (checked: boolean) => {
+    setSelectAllOutcomes(checked)
+    if (checked) {
+      const allOutcomes = callOutcomes.map(outcome => outcome.id)
+      setFilters(prev => ({
+        ...prev,
+        selectedOutcomes: allOutcomes
+      }))
+    } else {
+      setFilters(prev => ({
+        ...prev,
+        selectedOutcomes: []
+      }))
+    }
+    setPagination(prev => ({ ...prev, page: 1 }))
+  }
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
+    } else {
+      setSortField(field)
+      setSortDirection('asc')
+    }
+    setPagination(prev => ({ ...prev, page: 1 }))
+  }
+
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) {
+      return <ArrowUpDown className="h-4 w-4 ml-1 text-gray-400" />
+    }
+    return sortDirection === 'asc' 
+      ? <ArrowUp className="h-4 w-4 ml-1 text-blue-500" />
+      : <ArrowDown className="h-4 w-4 ml-1 text-blue-500" />
+  }
+
   if (!user || !userType) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -418,9 +394,17 @@ export default function DashboardPage() {
               <div className="flex gap-4">
                 <div className="flex-1">
                   <Input
-                    placeholder="Search by phone number, response category, or List ID..."
+                    placeholder="Search by phone number, response category..."
                     value={filters.search}
                     onChange={(e) => handleFilterChange('search', e.target.value)}
+                    className="w-full"
+                  />
+                </div>
+                <div className="flex-1">
+                  <Input
+                    placeholder="Search by List ID..."
+                    value={filters.listIdSearch}
+                    onChange={(e) => handleFilterChange('listIdSearch', e.target.value)}
                     className="w-full"
                   />
                 </div>
@@ -479,6 +463,26 @@ export default function DashboardPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Filter by Call Outcomes
                 </label>
+                
+                {/* Select All Checkbox */}
+                <div className="mb-3">
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="select-all"
+                      checked={selectAllOutcomes}
+                      onCheckedChange={(checked) => 
+                        handleSelectAllOutcomes(checked as boolean)
+                      }
+                    />
+                    <label
+                      htmlFor="select-all"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70"
+                    >
+                      Select All
+                    </label>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
                   {callOutcomes.map((outcome) => (
                     <div key={outcome.id} className="flex items-center space-x-2">
@@ -495,9 +499,9 @@ export default function DashboardPage() {
                       >
                         <outcome.icon className={`h-3 w-3 ${outcome.iconColor}`} />
                         {outcome.title}
-                        {outcomeCounts[outcome.id] && (
+                        {outcomeCounts[outcome.id] !== undefined && (
                           <span className="text-xs text-gray-500">
-                            ({outcomeCounts[outcome.id]})
+                            ({outcomeCounts[outcome.id] || 0})
                           </span>
                         )}
                       </label>
@@ -511,31 +515,10 @@ export default function DashboardPage() {
           {/* Results Section */}
           <Card>
             <CardHeader>
-              <div className="flex justify-between items-center">
-                <CardTitle className="flex items-center gap-2">
-                  <Phone className="h-5 w-5" />
-                  Call Records ({pagination.total} total)
-                </CardTitle>
-                <Select value={selectedTimezone} onValueChange={setSelectedTimezone}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PAKISTAN">
-                      <div className="flex items-center gap-2">
-                        <Globe className="h-4 w-4" />
-                        Pakistan Time
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="USA">
-                      <div className="flex items-center gap-2">
-                        <Globe className="h-4 w-4" />
-                        US Eastern
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <CardTitle className="flex items-center gap-2">
+                <Phone className="h-5 w-5" />
+                Call Records ({pagination.total} total)
+              </CardTitle>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -548,15 +531,61 @@ export default function DashboardPage() {
                     <table className="w-full">
                       <thead>
                         <tr className="border-b border-gray-200">
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">#</th>
+                          <th 
+                            className="text-left py-3 px-4 font-medium text-gray-700 cursor-pointer hover:bg-gray-50"
+                            onClick={() => handleSort('call_id')}
+                          >
+                            <div className="flex items-center">
+                              #
+                              {getSortIcon('call_id')}
+                            </div>
+                          </th>
                           {userType === 'admin' && (
-                            <th className="text-left py-3 px-4 font-medium text-gray-700">Client</th>
+                            <th 
+                              className="text-left py-3 px-4 font-medium text-gray-700 cursor-pointer hover:bg-gray-50"
+                              onClick={() => handleSort('client_name')}
+                            >
+                              <div className="flex items-center">
+                                Client
+                                {getSortIcon('client_name')}
+                              </div>
+                            </th>
                           )}
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Phone No</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">List ID</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Response Category</th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">
-                            Timestamp ({selectedTimezone === 'USA' ? 'US Eastern' : 'Pakistan'})
+                          <th 
+                            className="text-left py-3 px-4 font-medium text-gray-700 cursor-pointer hover:bg-gray-50"
+                            onClick={() => handleSort('phone_number')}
+                          >
+                            <div className="flex items-center">
+                              Phone No
+                              {getSortIcon('phone_number')}
+                            </div>
+                          </th>
+                          <th 
+                            className="text-left py-3 px-4 font-medium text-gray-700 cursor-pointer hover:bg-gray-50"
+                            onClick={() => handleSort('list_id')}
+                          >
+                            <div className="flex items-center">
+                              List ID
+                              {getSortIcon('list_id')}
+                            </div>
+                          </th>
+                          <th 
+                            className="text-left py-3 px-4 font-medium text-gray-700 cursor-pointer hover:bg-gray-50"
+                            onClick={() => handleSort('response_category')}
+                          >
+                            <div className="flex items-center">
+                              Response Category
+                              {getSortIcon('response_category')}
+                            </div>
+                          </th>
+                          <th 
+                            className="text-left py-3 px-4 font-medium text-gray-700 cursor-pointer hover:bg-gray-50"
+                            onClick={() => handleSort('timestamp')}
+                          >
+                            <div className="flex items-center">
+                              Timestamp
+                              {getSortIcon('timestamp')}
+                            </div>
                           </th>
                           <th className="text-left py-3 px-4 font-medium text-gray-700">Action</th>
                         </tr>

@@ -49,8 +49,8 @@ export function DashboardHeader() {
             <div>
               <h1 className="text-xl font-semibold text-gray-900">XDialNetworks</h1>
               {user?.name && (
-                <p className="text-sm text-gray-500">
-                  Welcome back, {user.name}
+                <p className="text-lg font-medium text-blue-600 mt-1">
+                  Welcome back, {user.name}!
                 </p>
               )}
             </div>
