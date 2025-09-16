@@ -69,8 +69,30 @@ export default function RecordingsPage() {
       const storedUser = sessionStorage.getItem('user')
       const storedUserType = sessionStorage.getItem('userType')
       
+      console.log('Raw sessionStorage data:')
+      console.log('user:', storedUser)
+      console.log('userType:', storedUserType)
+      
       if (storedUser) {
-        setUser(JSON.parse(storedUser))
+        const parsedUser = JSON.parse(storedUser)
+        console.log('Parsed user object:', parsedUser)
+        setUser(parsedUser)
+        
+        // Debug API call (only in development)
+        if (process.env.NODE_ENV === 'development') {
+          fetch('/api/debug/session', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              user: parsedUser,
+              userType: storedUserType,
+              rawSession: {
+                user: storedUser,
+                userType: storedUserType
+              }
+            })
+          }).catch(err => console.log('Debug API call failed:', err))
+        }
       }
       if (storedUserType) {
         setUserType(storedUserType)
@@ -80,17 +102,28 @@ export default function RecordingsPage() {
 
   // Fetch recordings
   const fetchRecordings = async () => {
-    const clientId = user?.id
+    // Try to get client ID from different possible fields
+    let clientId = user?.id || user?.client_id
+    
+    // Fallback: if user has username and it's a number, use that as client_id
+    if (!clientId && user?.username && !isNaN(parseInt(user.username))) {
+      clientId = parseInt(user.username)
+      console.log('Using username as client_id fallback:', clientId)
+    }
     
     console.log('Recordings fetch attempt:', { 
       user, 
       userType, 
       clientId, 
-      selectedDate 
+      selectedDate,
+      'user.id': user?.id,
+      'user.client_id': user?.client_id,
+      'user.username': user?.username
     })
     
     if (!clientId) {
       console.log('No client ID found, not fetching recordings')
+      setError('Client ID not found. Please log out and log in again.')
       setLoading(false)
       return
     }
@@ -133,8 +166,22 @@ export default function RecordingsPage() {
   }
 
   useEffect(() => {
-    const clientId = user?.id
-    console.log('Recordings useEffect triggered:', { user, userType, clientId })
+    // Try to get client ID from different possible fields
+    let clientId = user?.id || user?.client_id
+    
+    // Fallback: if user has username and it's a number, use that as client_id
+    if (!clientId && user?.username && !isNaN(parseInt(user.username))) {
+      clientId = parseInt(user.username)
+    }
+    
+    console.log('Recordings useEffect triggered:', { 
+      user, 
+      userType, 
+      clientId,
+      'user.id': user?.id,
+      'user.client_id': user?.client_id,
+      'user.username': user?.username
+    })
     
     if (clientId && userType === 'client') {
       fetchRecordings()
@@ -144,6 +191,7 @@ export default function RecordingsPage() {
       setLoading(false)
     } else {
       console.log('No client ID available or not a client user, setting loading to false')
+      setError('Client ID not found. Please ensure you are logged in as a client.')
       setLoading(false)
     }
   }, [user, userType, selectedDate])
@@ -361,6 +409,30 @@ export default function RecordingsPage() {
               Listen to and download your call recordings
             </p>
           </div>
+
+          {/* Debug Info (temporary) */}
+          {process.env.NODE_ENV === 'development' && (
+            <Card className="mb-6 border-gray-200 bg-gray-50">
+              <CardContent className="pt-4">
+                <h3 className="text-sm font-medium text-gray-700 mb-2">Debug Info:</h3>
+                <div className="text-xs font-mono text-gray-600 space-y-1">
+                  <div>User Type: {userType}</div>
+                  <div>User ID: {user?.id || 'undefined'}</div>
+                  <div>User Client ID: {user?.client_id || 'undefined'}</div>
+                  <div>User Name: {user?.name || 'undefined'}</div>
+                  <div>User Username: {user?.username || 'undefined'}</div>
+                  <div>User Extension: {user?.extension || 'undefined'}</div>
+                  <div>Computed Client ID: {
+                    user?.id || 
+                    user?.client_id || 
+                    (user?.username && !isNaN(parseInt(user.username)) ? parseInt(user.username) : null) ||
+                    'none found'
+                  }</div>
+                  <div>User Object: {JSON.stringify(user, null, 2)}</div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Access Control Notice for Admin */}
           {userType === 'admin' && (
