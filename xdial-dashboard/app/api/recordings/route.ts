@@ -1,33 +1,70 @@
 // app/api/recordings/route.ts
 import { NextRequest, NextResponse } from 'next/server'
+import { Pool } from 'pg'
 import https from 'https'
 import { URL } from 'url'
 
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+})
+
 export async function GET(request: NextRequest) {
-  console.log('🔥🔥🔥 RECORDINGS API CALLED - EXTENSION VERSION 🔥🔥🔥')
+  console.log('🔥🔥🔥 RECORDINGS API CALLED - DATABASE VERSION 🔥🔥🔥')
   
   try {
     const { searchParams } = new URL(request.url)
-    const extension = searchParams.get('extension')
+    const clientId = searchParams.get('client_id')
     const date = searchParams.get('date')
 
     console.log(`📋 Request Parameters:`)
-    console.log(`   - Extension: ${extension}`)
+    console.log(`   - Client ID: ${clientId}`)
     console.log(`   - Date: ${date}`)
 
-    if (!extension || !date) {
+    if (!clientId || !date) {
       console.log('❌ Missing required parameters')
       return NextResponse.json({ 
-        error: !extension ? 'Extension required' : 'Date required',
+        error: !clientId ? 'Client ID required' : 'Date required',
+        recordings: [] 
+      }, { status: 400 })
+    }
+
+    // Fetch client details from database
+    console.log('🔍 Fetching client details from database...')
+    const clientResult = await pool.query(
+      'SELECT client_id, client_name, extension, fetch_recording_url FROM clients WHERE client_id = $1',
+      [parseInt(clientId)]
+    )
+
+    if (clientResult.rows.length === 0) {
+      console.log('❌ Client not found in database')
+      return NextResponse.json({ 
+        error: 'Client not found',
+        recordings: [] 
+      }, { status: 404 })
+    }
+
+    const client = clientResult.rows[0]
+    const { extension, fetch_recording_url, client_name } = client
+
+    console.log(`✅ Client found: ${client_name}`)
+    console.log(`   - Extension: ${extension}`)
+    console.log(`   - Recording URL: ${fetch_recording_url}`)
+
+    if (!extension || !fetch_recording_url) {
+      console.log('❌ Missing extension or recording URL for client')
+      return NextResponse.json({ 
+        error: 'Client configuration incomplete - missing extension or recording URL',
         recordings: [] 
       }, { status: 400 })
     }
 
     // Format date from YYYY-MM-DD to YYYYMMDD
     const formattedDate = date.replace(/-/g, '')
-    const apiUrl = `https://xliteshared3.xdialnetworks.com/server_api/fetch_recording.php?date=${formattedDate}&extension=${extension}`
     
-    console.log(`🌐 External API URL: ${apiUrl}`)
+    // Construct the API URL using client's fetch_recording_url
+    const apiUrl = `${fetch_recording_url}?extension=${extension}&date=${formattedDate}`
+    
+    console.log(`🌐 Dynamic API URL: ${apiUrl}`)
     console.log(`🚀 Making HTTPS request with SSL certificate bypass...`)
 
     // Use native Node.js HTTPS with SSL bypass (equivalent to curl -k)
@@ -120,7 +157,7 @@ export async function GET(request: NextRequest) {
     const transformedRecordings = Object.entries(recordings).map(([key, rec]: [string, any]) => {
       // Create proxy URL for the audio file
       const originalUrl = rec.url || ''
-      const proxyUrl = originalUrl ? `/api/audio?url=${encodeURIComponent(originalUrl)}` : ''
+      const proxyUrl = originalUrl ? `/api/audio?url=${encodeURIComponent(originalUrl)}&client_id=${clientId}` : ''
       
       const transformed = {
         id: key,
@@ -137,8 +174,6 @@ export async function GET(request: NextRequest) {
       }
       
       console.log(`   Transformed recording ${key}: ${rec.number} at ${rec.date} ${rec.time}`)
-      console.log(`     - Original URL: ${originalUrl}`)
-      console.log(`     - Proxy URL: ${proxyUrl}`)
       return transformed
     })
 
@@ -147,10 +182,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ 
       recordings: transformedRecordings,
       total: transformedRecordings.length,
+      client_id: clientId,
+      client_name: client_name,
       extension: extension,
       date: date,
       source: 'external_api',
-      api_url: apiUrl.split('?')[0], // Don't expose parameters
+      api_url: fetch_recording_url, // Return the base API URL
       success: true
     })
 

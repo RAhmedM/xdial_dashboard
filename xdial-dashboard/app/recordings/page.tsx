@@ -37,6 +37,8 @@ interface User {
 interface ApiResponse {
   recordings: Recording[]
   total: number
+  client_id?: string
+  client_name?: string
   extension?: string
   date?: string
   warning?: string
@@ -78,17 +80,17 @@ export default function RecordingsPage() {
 
   // Fetch recordings
   const fetchRecordings = async () => {
-    const extension = user?.extension
+    const clientId = user?.id
     
     console.log('Recordings fetch attempt:', { 
       user, 
       userType, 
-      extension, 
+      clientId, 
       selectedDate 
     })
     
-    if (!extension) {
-      console.log('No extension found, not fetching recordings')
+    if (!clientId) {
+      console.log('No client ID found, not fetching recordings')
       setLoading(false)
       return
     }
@@ -99,7 +101,7 @@ export default function RecordingsPage() {
     setWarning(null)
     
     try {
-      const url = `/api/recordings?extension=${extension}&date=${selectedDate}`
+      const url = `/api/recordings?client_id=${clientId}&date=${selectedDate}`
       console.log('Fetching recordings from:', url)
       
       const response = await fetch(url)
@@ -131,16 +133,20 @@ export default function RecordingsPage() {
   }
 
   useEffect(() => {
-    const extension = user?.extension
-    console.log('Recordings useEffect triggered:', { user, userType, extension })
+    const clientId = user?.id
+    console.log('Recordings useEffect triggered:', { user, userType, clientId })
     
-    if (extension) {
+    if (clientId && userType === 'client') {
       fetchRecordings()
+    } else if (userType === 'admin') {
+      // Admin users shouldn't access recordings directly
+      setError('Admin users cannot access recordings directly. Please use client login.')
+      setLoading(false)
     } else {
-      console.log('No extension available, setting loading to false')
+      console.log('No client ID available or not a client user, setting loading to false')
       setLoading(false)
     }
-  }, [user, selectedDate])
+  }, [user, userType, selectedDate])
 
   // Filter and sort recordings
   useEffect(() => {
@@ -356,6 +362,16 @@ export default function RecordingsPage() {
             </p>
           </div>
 
+          {/* Access Control Notice for Admin */}
+          {userType === 'admin' && (
+            <Alert className="mb-6 border-blue-200 bg-blue-50">
+              <AlertTriangle className="h-4 w-4 text-blue-600" />
+              <AlertDescription className="text-blue-800">
+                Recordings are only available for client accounts. Please log in with a client account to access recordings.
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Error Alert */}
           {error && (
             <Alert className="mb-6 border-red-200 bg-red-50">
@@ -385,175 +401,180 @@ export default function RecordingsPage() {
             </Alert>
           )}
 
-          {/* Filters */}
-          <Card className="mb-6">
-            <CardContent className="pt-6">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {/* Date Picker */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
-                    <Calendar className="h-4 w-4" />
-                    Date
-                  </label>
-                  <Input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="w-full"
-                  />
-                </div>
+          {/* Only show filters and content for client users */}
+          {userType === 'client' && (
+            <>
+              {/* Filters */}
+              <Card className="mb-6">
+                <CardContent className="pt-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Date Picker */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                        <Calendar className="h-4 w-4" />
+                        Date
+                      </label>
+                      <Input
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => setSelectedDate(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
 
-                {/* Search */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
-                    <Search className="h-4 w-4" />
-                    Search
-                  </label>
-                  <Input
-                    placeholder="Search phone number, category..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full"
-                  />
-                </div>
+                    {/* Search */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
+                        <Search className="h-4 w-4" />
+                        Search
+                      </label>
+                      <Input
+                        placeholder="Search phone number, category..."
+                        value={searchTerm}
+                        onChange={(e) => setSearchTerm(e.target.value)}
+                        className="w-full"
+                      />
+                    </div>
 
-                {/* Refresh Button */}
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-gray-700">
-                    Actions
-                  </label>
-                  <Button 
-                    onClick={fetchRecordings}
-                    disabled={loading}
-                    className="w-full"
-                    variant="outline"
-                  >
-                    <RefreshCcw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
-                    Refresh
-                  </Button>
-                </div>
+                    {/* Refresh Button */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">
+                        Actions
+                      </label>
+                      <Button 
+                        onClick={fetchRecordings}
+                        disabled={loading}
+                        className="w-full"
+                        variant="outline"
+                      >
+                        <RefreshCcw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                        Refresh
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Results Summary */}
+              <div className="mb-4 flex items-center justify-between">
+                <p className="text-sm text-gray-600">
+                  Showing {filteredRecordings.length} of {recordings.length} recordings
+                  {selectedDate && ` for ${format(new Date(selectedDate), 'MMMM d, yyyy')}`}
+                </p>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Results Summary */}
-          <div className="mb-4 flex items-center justify-between">
-            <p className="text-sm text-gray-600">
-              Showing {filteredRecordings.length} of {recordings.length} recordings
-              {selectedDate && ` for ${format(new Date(selectedDate), 'MMMM d, yyyy')}`}
-            </p>
-          </div>
-
-          {/* Recordings Table */}
-          {loading ? (
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center py-8">
-                  <RefreshCcw className="h-8 w-8 animate-spin mx-auto mb-2 text-gray-400" />
-                  <p className="text-gray-500">Loading recordings...</p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : filteredRecordings.length === 0 ? (
-            <Card>
-              <CardContent className="pt-6">
-                <div className="text-center py-8">
-                  <FileAudio className="h-12 w-12 mx-auto mb-4 text-gray-400" />
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">No recordings found</h3>
-                  <p className="text-gray-500">
-                    {recordings.length === 0 
-                      ? "No recordings available for this date."
-                      : "No recordings match your current filters."
-                    }
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card>
-              <CardContent className="p-0">
-                <div className="overflow-x-auto">
-                  <table className="w-full">
-                    <thead className="border-b border-gray-200 bg-gray-50">
-                      <tr>
-                        <SortableHeader field="timestamp">Time</SortableHeader>
-                        <SortableHeader field="phone_number">Phone Number</SortableHeader>
-                        <SortableHeader field="duration">Duration</SortableHeader>
-                        <SortableHeader field="response_category">Category</SortableHeader>
-                        <SortableHeader field="size">Size</SortableHeader>
-                        <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredRecordings.map((recording) => (
-                        <tr key={recording.id} className="border-b border-gray-100 hover:bg-gray-50">
-                          <td className="py-3 px-4 text-sm text-gray-900">
-                            {formatTimestamp(recording.timestamp)}
-                          </td>
-                          <td className="py-3 px-4 text-sm font-medium text-gray-900">
-                            {recording.phone_number}
-                          </td>
-                          <td className="py-3 px-4 text-sm text-gray-900">
-                            {formatDuration(recording.duration)}
-                          </td>
-                          <td className="py-3 px-4">
-                            <Badge className={getStatusBadgeColor(recording.response_category)}>
-                              {recording.response_category}
-                            </Badge>
-                          </td>
-                          <td className="py-3 px-4 text-sm text-gray-500">
-                            {recording.size || '-'}
-                          </td>
-                          <td className="py-3 px-4">
-                            <div className="flex items-center gap-2">
-                              {/* Audio Player */}
-                              {recording.audio_url && (
+              {/* Recordings Table */}
+              {loading ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8">
+                      <RefreshCcw className="h-8 w-8 animate-spin mx-auto mb-2 text-gray-400" />
+                      <p className="text-gray-500">Loading recordings...</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : filteredRecordings.length === 0 ? (
+                <Card>
+                  <CardContent className="pt-6">
+                    <div className="text-center py-8">
+                      <FileAudio className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+                      <h3 className="text-lg font-medium text-gray-900 mb-2">No recordings found</h3>
+                      <p className="text-gray-500">
+                        {recordings.length === 0 
+                          ? "No recordings available for this date."
+                          : "No recordings match your current filters."
+                        }
+                      </p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : (
+                <Card>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <table className="w-full">
+                        <thead className="border-b border-gray-200 bg-gray-50">
+                          <tr>
+                            <SortableHeader field="timestamp">Time</SortableHeader>
+                            <SortableHeader field="phone_number">Phone Number</SortableHeader>
+                            <SortableHeader field="duration">Duration</SortableHeader>
+                            <SortableHeader field="response_category">Category</SortableHeader>
+                            <SortableHeader field="size">Size</SortableHeader>
+                            <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {filteredRecordings.map((recording) => (
+                            <tr key={recording.id} className="border-b border-gray-100 hover:bg-gray-50">
+                              <td className="py-3 px-4 text-sm text-gray-900">
+                                {formatTimestamp(recording.timestamp)}
+                              </td>
+                              <td className="py-3 px-4 text-sm font-medium text-gray-900">
+                                {recording.phone_number}
+                              </td>
+                              <td className="py-3 px-4 text-sm text-gray-900">
+                                {formatDuration(recording.duration)}
+                              </td>
+                              <td className="py-3 px-4">
+                                <Badge className={getStatusBadgeColor(recording.response_category)}>
+                                  {recording.response_category}
+                                </Badge>
+                              </td>
+                              <td className="py-3 px-4 text-sm text-gray-500">
+                                {recording.size || '-'}
+                              </td>
+                              <td className="py-3 px-4">
                                 <div className="flex items-center gap-2">
+                                  {/* Audio Player */}
+                                  {recording.audio_url && (
+                                    <div className="flex items-center gap-2">
+                                      <Button
+                                        size="sm"
+                                        variant="outline"
+                                        onClick={() => handlePlay(recording.id)}
+                                      >
+                                        {playingId === recording.id ? (
+                                          <Pause className="h-4 w-4" />
+                                        ) : (
+                                          <Play className="h-4 w-4" />
+                                        )}
+                                      </Button>
+                                      
+                                      {playingId === recording.id && (
+                                        <audio
+                                          controls
+                                          autoPlay
+                                          className="w-32"
+                                          onEnded={() => setPlayingId(null)}
+                                        >
+                                          <source src={recording.audio_url} type="audio/wav" />
+                                          <source src={recording.audio_url} type="audio/mpeg" />
+                                          Your browser does not support the audio element.
+                                        </audio>
+                                      )}
+                                    </div>
+                                  )}
+
+                                  {/* Download Button */}
                                   <Button
                                     size="sm"
                                     variant="outline"
-                                    onClick={() => handlePlay(recording.id)}
+                                    onClick={() => handleDownload(recording)}
                                   >
-                                    {playingId === recording.id ? (
-                                      <Pause className="h-4 w-4" />
-                                    ) : (
-                                      <Play className="h-4 w-4" />
-                                    )}
+                                    <Download className="h-4 w-4 mr-1" />
+                                    Download
                                   </Button>
-                                  
-                                  {playingId === recording.id && (
-                                    <audio
-                                      controls
-                                      autoPlay
-                                      className="w-32"
-                                      onEnded={() => setPlayingId(null)}
-                                    >
-                                      <source src={recording.audio_url} type="audio/wav" />
-                                      <source src={recording.audio_url} type="audio/mpeg" />
-                                      Your browser does not support the audio element.
-                                    </audio>
-                                  )}
                                 </div>
-                              )}
-
-                              {/* Download Button */}
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => handleDownload(recording)}
-                              >
-                                <Download className="h-4 w-4 mr-1" />
-                                Download
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </CardContent>
-            </Card>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </>
           )}
         </div>
       </main>

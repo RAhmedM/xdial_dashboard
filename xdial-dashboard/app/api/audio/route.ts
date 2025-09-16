@@ -1,7 +1,12 @@
 // app/api/audio/route.ts
 import { NextRequest, NextResponse } from 'next/server'
+import { Pool } from 'pg'
 import https from 'https'
 import { URL } from 'url'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+})
 
 export async function GET(request: NextRequest) {
   console.log('🎵 Audio proxy API called')
@@ -9,31 +14,58 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const audioUrl = searchParams.get('url')
+    const clientId = searchParams.get('client_id')
     
-    if (!audioUrl) {
-      console.log('❌ Missing audio URL parameter')
+    if (!audioUrl || !clientId) {
+      console.log('❌ Missing required parameters')
       return NextResponse.json({ 
-        error: 'Audio URL parameter is required' 
+        error: 'Audio URL and Client ID parameters are required' 
       }, { status: 400 })
     }
 
-    // Validate that the URL is from the expected domain for security
-    const urlObj = new URL(audioUrl)
-    if (!urlObj.hostname.includes('xliteshared3.xdialnetworks.com')) {
-      console.log('❌ Invalid audio URL domain:', urlObj.hostname)
+    // Fetch client's fetch_recording_url from database for security validation
+    console.log(`🔍 Validating client ${clientId} for audio access...`)
+    const clientResult = await pool.query(
+      'SELECT fetch_recording_url FROM clients WHERE client_id = $1',
+      [parseInt(clientId)]
+    )
+
+    if (clientResult.rows.length === 0) {
+      console.log('❌ Client not found in database')
       return NextResponse.json({ 
-        error: 'Invalid audio URL domain' 
+        error: 'Invalid client' 
+      }, { status: 404 })
+    }
+
+    const client = clientResult.rows[0]
+    const clientRecordingUrl = client.fetch_recording_url
+
+    if (!clientRecordingUrl) {
+      console.log('❌ Client has no recording URL configured')
+      return NextResponse.json({ 
+        error: 'Client recording URL not configured' 
       }, { status: 400 })
     }
 
-    console.log(`🌐 Proxying audio file: ${audioUrl}`)
+    // Validate that the audio URL is from the same domain as the client's recording API
+    const audioUrlObj = new URL(audioUrl)
+    const clientUrlObj = new URL(clientRecordingUrl)
+
+    if (audioUrlObj.hostname !== clientUrlObj.hostname) {
+      console.log(`❌ Invalid audio URL domain: ${audioUrlObj.hostname}, expected: ${clientUrlObj.hostname}`)
+      return NextResponse.json({ 
+        error: 'Invalid audio URL domain for this client' 
+      }, { status: 403 })
+    }
+
+    console.log(`🌐 Proxying audio file from ${audioUrlObj.hostname}: ${audioUrl}`)
 
     // Fetch the audio file from the external server
     const audioData = await new Promise<Buffer>((resolve, reject) => {
       const options = {
-        hostname: urlObj.hostname,
-        port: urlObj.port || 443,
-        path: urlObj.pathname + urlObj.search,
+        hostname: audioUrlObj.hostname,
+        port: audioUrlObj.port || 443,
+        path: audioUrlObj.pathname + audioUrlObj.search,
         method: 'GET',
         headers: {
           'User-Agent': 'XDialNetworks-Dashboard/1.0',
