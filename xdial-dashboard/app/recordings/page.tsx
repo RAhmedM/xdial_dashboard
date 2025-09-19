@@ -1,4 +1,5 @@
-'use client'
+// Get user info on component mount
+  useEffect(() => {'use client'
 
 import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
@@ -79,11 +80,20 @@ export default function RecordingsPage() {
   const [hasPrevPage, setHasPrevPage] = useState(false)
   const [dataSource, setDataSource] = useState<'cache' | 'fresh' | null>(null)
 
+  // Debounce state to prevent multiple rapid API calls
+  const [debounceTimer, setDebounceTimer] = useState<NodeJS.Timeout | null>(null)
+
   // Track previous selected date to detect changes
   const prevSelectedDate = useRef(selectedDate)
 
-  // Get user info on component mount
+  // Cleanup debounce timer on unmount
   useEffect(() => {
+    return () => {
+      if (debounceTimer) {
+        clearTimeout(debounceTimer)
+      }
+    }
+  }, [])
     if (typeof window !== 'undefined') {
       const storedUser = sessionStorage.getItem('user')
       const storedUserType = sessionStorage.getItem('userType')
@@ -121,7 +131,14 @@ export default function RecordingsPage() {
 
   // Reset to first page when filters or sorting change
   useEffect(() => {
+    console.log('Reset to page 1 triggered by:', { selectedDate, searchTerm, pageSize, sortField, sortDirection })
     setCurrentPage(1)
+    
+    // Clear any pending debounce timer
+    if (debounceTimer) {
+      clearTimeout(debounceTimer)
+      setDebounceTimer(null)
+    }
   }, [selectedDate, searchTerm, pageSize, sortField, sortDirection])
 
   // Fetch recordings
@@ -226,15 +243,24 @@ export default function RecordingsPage() {
       clientId = parseInt(user.username)
     }
     
-    console.log('Recordings useEffect triggered:', { 
-      user, 
+    console.log('Main useEffect triggered:', { 
+      user: !!user, 
       userType, 
       clientId,
       currentPage,
+      selectedDate,
+      sortField,
+      sortDirection,
+      searchTerm,
       'user.id': user?.id,
       'user.client_id': user?.client_id,
       'user.username': user?.username
     })
+    
+    // Clear any existing debounce timer
+    if (debounceTimer) {
+      clearTimeout(debounceTimer)
+    }
     
     if (clientId && userType === 'client') {
       // Force refresh when date changes, but not on page/sort changes
@@ -242,7 +268,19 @@ export default function RecordingsPage() {
       if (shouldForceRefresh) {
         prevSelectedDate.current = selectedDate
       }
-      fetchRecordings(currentPage, shouldForceRefresh)
+      
+      // Debounce the API call to prevent rapid successive calls
+      const timer = setTimeout(() => {
+        console.log('Executing debounced fetch with:', { currentPage, shouldForceRefresh })
+        fetchRecordings(currentPage, shouldForceRefresh)
+      }, 100) // 100ms debounce
+      
+      setDebounceTimer(timer)
+      
+      // Cleanup function
+      return () => {
+        clearTimeout(timer)
+      }
     } else if (userType === 'admin') {
       // Admin users shouldn't access recordings directly
       setError('Admin users cannot access recordings directly. Please use client login.')
@@ -255,12 +293,22 @@ export default function RecordingsPage() {
   }, [user, userType, selectedDate, currentPage, pageSize, searchTerm, sortField, sortDirection])
 
   const handleSort = (field: SortField) => {
+    console.log('Sort clicked:', { field, currentSortField: sortField, currentSortDirection: sortDirection, currentPage })
+    
+    // Clear any existing debounce timer to prevent race conditions
+    if (debounceTimer) {
+      clearTimeout(debounceTimer)
+      setDebounceTimer(null)
+    }
+    
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
     } else {
       setSortField(field)
       setSortDirection('desc')
     }
+    
+    // The page reset will be handled by the useEffect that watches sortField and sortDirection
   }
 
   const handlePageChange = (page: number) => {
