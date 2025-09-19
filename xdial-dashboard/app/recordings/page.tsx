@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -50,6 +50,7 @@ interface ApiResponse {
   search?: string
   warning?: string
   source?: string
+  cached?: boolean
   error?: string
 }
 
@@ -76,6 +77,10 @@ export default function RecordingsPage() {
   const [totalPages, setTotalPages] = useState(0)
   const [hasNextPage, setHasNextPage] = useState(false)
   const [hasPrevPage, setHasPrevPage] = useState(false)
+  const [dataSource, setDataSource] = useState<'cache' | 'fresh' | null>(null)
+
+  // Track previous selected date to detect changes
+  const prevSelectedDate = useRef(selectedDate)
 
   // Get user info on component mount
   useEffect(() => {
@@ -114,13 +119,13 @@ export default function RecordingsPage() {
     }
   }, [])
 
-  // Reset to first page when filters change
+  // Reset to first page when filters or sorting change
   useEffect(() => {
     setCurrentPage(1)
-  }, [selectedDate, searchTerm, pageSize])
+  }, [selectedDate, searchTerm, pageSize, sortField, sortDirection])
 
   // Fetch recordings
-  const fetchRecordings = async (page = currentPage) => {
+  const fetchRecordings = async (page = currentPage, forceRefresh = false) => {
     // Try to get client ID from different possible fields
     let clientId = user?.id || user?.client_id
     
@@ -160,11 +165,17 @@ export default function RecordingsPage() {
         client_id: clientId.toString(),
         date: selectedDate,
         page: page.toString(),
-        limit: pageSize.toString()
+        limit: pageSize.toString(),
+        sortField: sortField,
+        sortDirection: sortDirection
       })
       
       if (searchTerm.trim()) {
         params.append('search', searchTerm.trim())
+      }
+      
+      if (forceRefresh) {
+        params.append('refresh', 'true')
       }
       
       const url = `/api/recordings?${params.toString()}`
@@ -186,6 +197,7 @@ export default function RecordingsPage() {
       setHasNextPage(data.hasNextPage || false)
       setHasPrevPage(data.hasPrevPage || false)
       setCurrentPage(data.page || 1)
+      setDataSource(data.cached ? 'cache' : 'fresh')
       
       // Show warning if there's one
       if (data.warning) {
@@ -225,7 +237,12 @@ export default function RecordingsPage() {
     })
     
     if (clientId && userType === 'client') {
-      fetchRecordings()
+      // Force refresh when date changes, but not on page/sort changes
+      const shouldForceRefresh = prevSelectedDate.current !== selectedDate
+      if (shouldForceRefresh) {
+        prevSelectedDate.current = selectedDate
+      }
+      fetchRecordings(currentPage, shouldForceRefresh)
     } else if (userType === 'admin') {
       // Admin users shouldn't access recordings directly
       setError('Admin users cannot access recordings directly. Please use client login.')
@@ -235,11 +252,9 @@ export default function RecordingsPage() {
       setError('Client ID not found. Please ensure you are logged in as a client.')
       setLoading(false)
     }
-  }, [user, userType, selectedDate, currentPage, pageSize, searchTerm])
+  }, [user, userType, selectedDate, currentPage, pageSize, searchTerm, sortField, sortDirection])
 
   const handleSort = (field: SortField) => {
-    // Note: Sorting is now handled server-side by timestamp
-    // This is kept for potential future client-side sorting
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
     } else {
@@ -496,6 +511,9 @@ export default function RecordingsPage() {
                   <div>Page Size: {pageSize}</div>
                   <div>Total Records: {totalRecordings}</div>
                   <div>Total Pages: {totalPages}</div>
+                  <div>Sort Field: {sortField}</div>
+                  <div>Sort Direction: {sortDirection}</div>
+                  <div>Data Source: {dataSource || 'unknown'}</div>
                   <div>Computed Client ID: {
                     user?.id || 
                     user?.client_id || 
@@ -526,7 +544,7 @@ export default function RecordingsPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => fetchRecordings()}
+                  onClick={() => fetchRecordings(currentPage, true)}
                   className="ml-2 h-6 px-2"
                 >
                   <RefreshCcw className="h-3 w-3 mr-1" />
@@ -605,7 +623,7 @@ export default function RecordingsPage() {
                         Actions
                       </label>
                       <Button 
-                        onClick={() => fetchRecordings()}
+                        onClick={() => fetchRecordings(currentPage, true)}
                         disabled={loading}
                         className="w-full"
                         variant="outline"
@@ -620,14 +638,25 @@ export default function RecordingsPage() {
 
               {/* Results Summary */}
               <div className="mb-4 flex items-center justify-between">
-                <p className="text-sm text-gray-600">
-                  {totalRecordings > 0 
-                    ? `Found ${totalRecordings} recording${totalRecordings !== 1 ? 's' : ''}`
-                    : 'No recordings found'
-                  }
-                  {selectedDate && ` for ${format(new Date(selectedDate), 'MMMM d, yyyy')}`}
-                  {searchTerm && ` matching "${searchTerm}"`}
-                </p>
+                <div className="flex items-center gap-4">
+                  <p className="text-sm text-gray-600">
+                    {totalRecordings > 0 
+                      ? `Found ${totalRecordings} recording${totalRecordings !== 1 ? 's' : ''}`
+                      : 'No recordings found'
+                    }
+                    {selectedDate && ` for ${format(new Date(selectedDate), 'MMMM d, yyyy')}`}
+                    {searchTerm && ` matching "${searchTerm}"`}
+                  </p>
+                  
+                  {dataSource && (
+                    <div className="flex items-center gap-1">
+                      <div className={`h-2 w-2 rounded-full ${dataSource === 'cache' ? 'bg-blue-400' : 'bg-green-400'}`} />
+                      <span className="text-xs text-gray-500">
+                        {dataSource === 'cache' ? 'Cached data' : 'Fresh data'}
+                      </span>
+                    </div>
+                  )}
+                </div>
                 
                 {totalPages > 1 && (
                   <p className="text-sm text-gray-600">
