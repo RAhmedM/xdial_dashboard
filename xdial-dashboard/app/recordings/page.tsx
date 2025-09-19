@@ -1,6 +1,4 @@
 // Get user info on component mount
-  useEffect(() => {'use client'
-
 import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { Card, CardContent } from "@/components/ui/card"
