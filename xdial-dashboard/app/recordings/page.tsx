@@ -1,3 +1,5 @@
+'use client'
+
 import { useState, useEffect, useRef } from 'react'
 import { format } from 'date-fns'
 import { Card, CardContent } from "@/components/ui/card"
@@ -91,6 +93,9 @@ export default function RecordingsPage() {
       }
     }
   }, [])
+
+  // Get user info on component mount
+  useEffect(() => {
     if (typeof window !== 'undefined') {
       const storedUser = sessionStorage.getItem('user')
       const storedUserType = sessionStorage.getItem('userType')
