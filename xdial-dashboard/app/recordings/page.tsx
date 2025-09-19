@@ -7,7 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { FileAudio, Play, Pause, Download, Search, Calendar, AlertTriangle, RefreshCcw, ChevronUp, ChevronDown } from 'lucide-react'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { FileAudio, Play, Pause, Download, Search, Calendar, AlertTriangle, RefreshCcw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { DashboardHeader } from '@/components/dashboard-header'
 
 interface Recording {
@@ -37,10 +38,16 @@ interface User {
 interface ApiResponse {
   recordings: Recording[]
   total: number
+  page: number
+  limit: number
+  totalPages: number
+  hasNextPage: boolean
+  hasPrevPage: boolean
   client_id?: string
   client_name?: string
   extension?: string
   date?: string
+  search?: string
   warning?: string
   source?: string
   error?: string
@@ -51,7 +58,6 @@ type SortDirection = 'asc' | 'desc'
 
 export default function RecordingsPage() {
   const [recordings, setRecordings] = useState<Recording[]>([])
-  const [filteredRecordings, setFilteredRecordings] = useState<Recording[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'))
   const [searchTerm, setSearchTerm] = useState("")
@@ -62,6 +68,14 @@ export default function RecordingsPage() {
   const [warning, setWarning] = useState<string | null>(null)
   const [sortField, setSortField] = useState<SortField>('timestamp')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
+
+  // Pagination states
+  const [currentPage, setCurrentPage] = useState(1)
+  const [pageSize, setPageSize] = useState(50)
+  const [totalRecordings, setTotalRecordings] = useState(0)
+  const [totalPages, setTotalPages] = useState(0)
+  const [hasNextPage, setHasNextPage] = useState(false)
+  const [hasPrevPage, setHasPrevPage] = useState(false)
 
   // Get user info on component mount
   useEffect(() => {
@@ -100,8 +114,13 @@ export default function RecordingsPage() {
     }
   }, [])
 
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [selectedDate, searchTerm, pageSize])
+
   // Fetch recordings
-  const fetchRecordings = async () => {
+  const fetchRecordings = async (page = currentPage) => {
     // Try to get client ID from different possible fields
     let clientId = user?.id || user?.client_id
     
@@ -116,6 +135,9 @@ export default function RecordingsPage() {
       userType, 
       clientId, 
       selectedDate,
+      page,
+      pageSize,
+      searchTerm,
       'user.id': user?.id,
       'user.client_id': user?.client_id,
       'user.username': user?.username
@@ -134,7 +156,18 @@ export default function RecordingsPage() {
     setWarning(null)
     
     try {
-      const url = `/api/recordings?client_id=${clientId}&date=${selectedDate}`
+      const params = new URLSearchParams({
+        client_id: clientId.toString(),
+        date: selectedDate,
+        page: page.toString(),
+        limit: pageSize.toString()
+      })
+      
+      if (searchTerm.trim()) {
+        params.append('search', searchTerm.trim())
+      }
+      
+      const url = `/api/recordings?${params.toString()}`
       console.log('Fetching recordings from:', url)
       
       const response = await fetch(url)
@@ -148,7 +181,11 @@ export default function RecordingsPage() {
       console.log('Recordings received:', data)
       
       setRecordings(data.recordings || [])
-      setFilteredRecordings(data.recordings || [])
+      setTotalRecordings(data.total || 0)
+      setTotalPages(data.totalPages || 0)
+      setHasNextPage(data.hasNextPage || false)
+      setHasPrevPage(data.hasPrevPage || false)
+      setCurrentPage(data.page || 1)
       
       // Show warning if there's one
       if (data.warning) {
@@ -159,7 +196,10 @@ export default function RecordingsPage() {
       console.error('Error fetching recordings:', error)
       setError(error instanceof Error ? error.message : 'Failed to load recordings')
       setRecordings([])
-      setFilteredRecordings([])
+      setTotalRecordings(0)
+      setTotalPages(0)
+      setHasNextPage(false)
+      setHasPrevPage(false)
     } finally {
       setLoading(false)
     }
@@ -178,6 +218,7 @@ export default function RecordingsPage() {
       user, 
       userType, 
       clientId,
+      currentPage,
       'user.id': user?.id,
       'user.client_id': user?.client_id,
       'user.username': user?.username
@@ -194,72 +235,28 @@ export default function RecordingsPage() {
       setError('Client ID not found. Please ensure you are logged in as a client.')
       setLoading(false)
     }
-  }, [user, userType, selectedDate])
-
-  // Filter and sort recordings
-  useEffect(() => {
-    let filtered = [...recordings]
-
-    // Search filter
-    if (searchTerm) {
-      filtered = filtered.filter(rec => 
-        rec.phone_number.includes(searchTerm) ||
-        rec.response_category.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (rec.speech_text && rec.speech_text.toLowerCase().includes(searchTerm.toLowerCase())) ||
-        (rec.filename && rec.filename.toLowerCase().includes(searchTerm.toLowerCase()))
-      )
-    }
-
-    // Sort recordings
-    filtered.sort((a, b) => {
-      let aValue: string | number
-      let bValue: string | number
-
-      switch (sortField) {
-        case 'timestamp':
-          aValue = new Date(a.timestamp).getTime()
-          bValue = new Date(b.timestamp).getTime()
-          break
-        case 'phone_number':
-          aValue = a.phone_number
-          bValue = b.phone_number
-          break
-        case 'duration':
-          // Convert duration to seconds for proper sorting
-          aValue = durationToSeconds(a.duration)
-          bValue = durationToSeconds(b.duration)
-          break
-        case 'response_category':
-          aValue = a.response_category
-          bValue = b.response_category
-          break
-        case 'size':
-          // Convert size to bytes for proper sorting
-          aValue = sizeToBytes(a.size || '')
-          bValue = sizeToBytes(b.size || '')
-          break
-        default:
-          aValue = a.timestamp
-          bValue = b.timestamp
-      }
-
-      if (sortDirection === 'asc') {
-        return aValue > bValue ? 1 : -1
-      } else {
-        return aValue < bValue ? 1 : -1
-      }
-    })
-
-    setFilteredRecordings(filtered)
-  }, [searchTerm, recordings, sortField, sortDirection])
+  }, [user, userType, selectedDate, currentPage, pageSize, searchTerm])
 
   const handleSort = (field: SortField) => {
+    // Note: Sorting is now handled server-side by timestamp
+    // This is kept for potential future client-side sorting
     if (sortField === field) {
       setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc')
     } else {
       setSortField(field)
       setSortDirection('desc')
     }
+  }
+
+  const handlePageChange = (page: number) => {
+    if (page >= 1 && page <= totalPages) {
+      setCurrentPage(page)
+    }
+  }
+
+  const handlePageSizeChange = (newPageSize: string) => {
+    setPageSize(parseInt(newPageSize))
+    setCurrentPage(1) // Reset to first page when changing page size
   }
 
   const handleDownload = async (recording: Recording) => {
@@ -345,37 +342,6 @@ export default function RecordingsPage() {
     }
   }
 
-  // Helper functions for sorting
-  const durationToSeconds = (duration: string): number => {
-    if (!duration) return 0
-    if (duration.includes(':')) {
-      const parts = duration.split(':').map(p => parseInt(p) || 0)
-      if (parts.length === 3) {
-        return parts[0] * 3600 + parts[1] * 60 + parts[2]
-      } else if (parts.length === 2) {
-        return parts[0] * 60 + parts[1]
-      }
-    }
-    return parseInt(duration) || 0
-  }
-
-  const sizeToBytes = (size: string): number => {
-    if (!size) return 0
-    const match = size.match(/^([\d.]+)\s*([KMGT]?B)$/i)
-    if (match) {
-      const value = parseFloat(match[1])
-      const unit = match[2].toUpperCase()
-      switch (unit) {
-        case 'KB': return value * 1024
-        case 'MB': return value * 1024 * 1024
-        case 'GB': return value * 1024 * 1024 * 1024
-        case 'TB': return value * 1024 * 1024 * 1024 * 1024
-        default: return value
-      }
-    }
-    return 0
-  }
-
   const SortableHeader = ({ field, children }: { field: SortField, children: React.ReactNode }) => (
     <th 
       className="text-left py-3 px-4 font-medium text-gray-700 cursor-pointer hover:bg-gray-50 select-none"
@@ -391,6 +357,110 @@ export default function RecordingsPage() {
       </div>
     </th>
   )
+
+  // Pagination component
+  const PaginationControls = () => {
+    const getPageNumbers = () => {
+      const pages = []
+      const maxVisible = 5
+      
+      if (totalPages <= maxVisible) {
+        for (let i = 1; i <= totalPages; i++) {
+          pages.push(i)
+        }
+      } else {
+        const start = Math.max(1, currentPage - Math.floor(maxVisible / 2))
+        const end = Math.min(totalPages, start + maxVisible - 1)
+        
+        if (start > 1) {
+          pages.push(1)
+          if (start > 2) pages.push('...')
+        }
+        
+        for (let i = start; i <= end; i++) {
+          pages.push(i)
+        }
+        
+        if (end < totalPages) {
+          if (end < totalPages - 1) pages.push('...')
+          pages.push(totalPages)
+        }
+      }
+      
+      return pages
+    }
+
+    if (totalPages <= 1) return null
+
+    return (
+      <div className="flex items-center justify-between mt-6">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-gray-700">
+            Showing {recordings.length > 0 ? ((currentPage - 1) * pageSize) + 1 : 0} to{' '}
+            {Math.min(currentPage * pageSize, totalRecordings)} of {totalRecordings} recordings
+          </span>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePageChange(1)}
+            disabled={!hasPrevPage}
+          >
+            <ChevronsLeft className="h-4 w-4" />
+          </Button>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePageChange(currentPage - 1)}
+            disabled={!hasPrevPage}
+          >
+            <ChevronLeft className="h-4 w-4" />
+            Previous
+          </Button>
+          
+          <div className="flex gap-1">
+            {getPageNumbers().map((page, index) => (
+              page === '...' ? (
+                <span key={index} className="px-3 py-2 text-gray-500">...</span>
+              ) : (
+                <Button
+                  key={page}
+                  variant={currentPage === page ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => handlePageChange(page as number)}
+                  className="min-w-[40px]"
+                >
+                  {page}
+                </Button>
+              )
+            ))}
+          </div>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePageChange(currentPage + 1)}
+            disabled={!hasNextPage}
+          >
+            Next
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => handlePageChange(totalPages)}
+            disabled={!hasNextPage}
+          >
+            <ChevronsRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -422,13 +492,16 @@ export default function RecordingsPage() {
                   <div>User Name: {user?.name || 'undefined'}</div>
                   <div>User Username: {user?.username || 'undefined'}</div>
                   <div>User Extension: {user?.extension || 'undefined'}</div>
+                  <div>Current Page: {currentPage}</div>
+                  <div>Page Size: {pageSize}</div>
+                  <div>Total Records: {totalRecordings}</div>
+                  <div>Total Pages: {totalPages}</div>
                   <div>Computed Client ID: {
                     user?.id || 
                     user?.client_id || 
                     (user?.username && !isNaN(parseInt(user.username)) ? parseInt(user.username) : null) ||
                     'none found'
                   }</div>
-                  <div>User Object: {JSON.stringify(user, null, 2)}</div>
                 </div>
               </CardContent>
             </Card>
@@ -453,7 +526,7 @@ export default function RecordingsPage() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={fetchRecordings}
+                  onClick={() => fetchRecordings()}
                   className="ml-2 h-6 px-2"
                 >
                   <RefreshCcw className="h-3 w-3 mr-1" />
@@ -479,7 +552,7 @@ export default function RecordingsPage() {
               {/* Filters */}
               <Card className="mb-6">
                 <CardContent className="pt-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
                     {/* Date Picker */}
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700 flex items-center gap-1">
@@ -508,13 +581,31 @@ export default function RecordingsPage() {
                       />
                     </div>
 
+                    {/* Page Size */}
+                    <div className="space-y-2">
+                      <label className="text-sm font-medium text-gray-700">
+                        Records per page
+                      </label>
+                      <Select value={pageSize.toString()} onValueChange={handlePageSizeChange}>
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="25">25 per page</SelectItem>
+                          <SelectItem value="50">50 per page</SelectItem>
+                          <SelectItem value="100">100 per page</SelectItem>
+                          <SelectItem value="200">200 per page</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
                     {/* Refresh Button */}
                     <div className="space-y-2">
                       <label className="text-sm font-medium text-gray-700">
                         Actions
                       </label>
                       <Button 
-                        onClick={fetchRecordings}
+                        onClick={() => fetchRecordings()}
                         disabled={loading}
                         className="w-full"
                         variant="outline"
@@ -530,9 +621,19 @@ export default function RecordingsPage() {
               {/* Results Summary */}
               <div className="mb-4 flex items-center justify-between">
                 <p className="text-sm text-gray-600">
-                  Showing {filteredRecordings.length} of {recordings.length} recordings
+                  {totalRecordings > 0 
+                    ? `Found ${totalRecordings} recording${totalRecordings !== 1 ? 's' : ''}`
+                    : 'No recordings found'
+                  }
                   {selectedDate && ` for ${format(new Date(selectedDate), 'MMMM d, yyyy')}`}
+                  {searchTerm && ` matching "${searchTerm}"`}
                 </p>
+                
+                {totalPages > 1 && (
+                  <p className="text-sm text-gray-600">
+                    Page {currentPage} of {totalPages}
+                  </p>
+                )}
               </div>
 
               {/* Recordings Table */}
@@ -545,14 +646,14 @@ export default function RecordingsPage() {
                     </div>
                   </CardContent>
                 </Card>
-              ) : filteredRecordings.length === 0 ? (
+              ) : recordings.length === 0 ? (
                 <Card>
                   <CardContent className="pt-6">
                     <div className="text-center py-8">
                       <FileAudio className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                       <h3 className="text-lg font-medium text-gray-900 mb-2">No recordings found</h3>
                       <p className="text-gray-500">
-                        {recordings.length === 0 
+                        {totalRecordings === 0 
                           ? "No recordings available for this date."
                           : "No recordings match your current filters."
                         }
@@ -576,7 +677,7 @@ export default function RecordingsPage() {
                           </tr>
                         </thead>
                         <tbody>
-                          {filteredRecordings.map((recording) => (
+                          {recordings.map((recording) => (
                             <tr key={recording.id} className="border-b border-gray-100 hover:bg-gray-50">
                               <td className="py-3 px-4 text-sm text-gray-900">
                                 {formatTimestamp(recording.timestamp)}
@@ -642,6 +743,11 @@ export default function RecordingsPage() {
                           ))}
                         </tbody>
                       </table>
+                    </div>
+                    
+                    {/* Pagination Controls */}
+                    <div className="p-4 border-t border-gray-200">
+                      <PaginationControls />
                     </div>
                   </CardContent>
                 </Card>

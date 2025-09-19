@@ -15,16 +15,39 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const clientId = searchParams.get('client_id')
     const date = searchParams.get('date')
+    const page = parseInt(searchParams.get('page') || '1')
+    const limit = parseInt(searchParams.get('limit') || '50')
+    const search = searchParams.get('search') || ''
 
     console.log(`📋 Request Parameters:`)
     console.log(`   - Client ID: ${clientId}`)
     console.log(`   - Date: ${date}`)
+    console.log(`   - Page: ${page}`)
+    console.log(`   - Limit: ${limit}`)
+    console.log(`   - Search: ${search}`)
 
     if (!clientId || !date) {
       console.log('❌ Missing required parameters')
       return NextResponse.json({ 
         error: !clientId ? 'Client ID required' : 'Date required',
-        recordings: [] 
+        recordings: [],
+        total: 0,
+        page: 1,
+        limit: limit,
+        totalPages: 0
+      }, { status: 400 })
+    }
+
+    // Validate pagination parameters
+    if (page < 1 || limit < 1 || limit > 1000) {
+      console.log('❌ Invalid pagination parameters')
+      return NextResponse.json({ 
+        error: 'Invalid pagination parameters. Page must be >= 1, limit must be 1-1000',
+        recordings: [],
+        total: 0,
+        page: 1,
+        limit: limit,
+        totalPages: 0
       }, { status: 400 })
     }
 
@@ -39,7 +62,11 @@ export async function GET(request: NextRequest) {
       console.log('❌ Client not found in database')
       return NextResponse.json({ 
         error: 'Client not found',
-        recordings: [] 
+        recordings: [],
+        total: 0,
+        page: page,
+        limit: limit,
+        totalPages: 0
       }, { status: 404 })
     }
 
@@ -54,7 +81,11 @@ export async function GET(request: NextRequest) {
       console.log('❌ Missing extension or recording URL for client')
       return NextResponse.json({ 
         error: 'Client configuration incomplete - missing extension or recording URL',
-        recordings: [] 
+        recordings: [],
+        total: 0,
+        page: page,
+        limit: limit,
+        totalPages: 0
       }, { status: 400 })
     }
 
@@ -80,7 +111,7 @@ export async function GET(request: NextRequest) {
           'User-Agent': 'XDialNetworks-Dashboard/1.0',
           'Cache-Control': 'no-cache'
         },
-        // 🔑 This is the key: ignore SSL certificate errors (same as curl -k)
+        // 🔓 This is the key: ignore SSL certificate errors (same as curl -k)
         rejectUnauthorized: false
       }
 
@@ -148,18 +179,22 @@ export async function GET(request: NextRequest) {
         error: 'Invalid JSON response from recording API',
         details: `Parse error: ${parseError.message}`,
         raw_preview: responseData.substring(0, 500),
-        recordings: []
+        recordings: [],
+        total: 0,
+        page: page,
+        limit: limit,
+        totalPages: 0
       }, { status: 500 })
     }
 
     // Transform recordings to our format with proxy URLs
     console.log('🔄 Transforming recordings data...')
-    const transformedRecordings = Object.entries(recordings).map(([key, rec]: [string, any]) => {
+    let transformedRecordings = Object.entries(recordings).map(([key, rec]: [string, any]) => {
       // Create proxy URL for the audio file
       const originalUrl = rec.url || ''
       const proxyUrl = originalUrl ? `/api/audio?url=${encodeURIComponent(originalUrl)}&client_id=${clientId}` : ''
       
-      const transformed = {
+      return {
         id: key,
         unique_id: `${rec.date}-${rec.time}_${rec.number}`,
         timestamp: formatTimestamp(rec.date, rec.time),
@@ -172,20 +207,52 @@ export async function GET(request: NextRequest) {
         size: rec.size || '',
         filename: rec.name || ''
       }
-      
-      console.log(`   Transformed recording ${key}: ${rec.number} at ${rec.date} ${rec.time}`)
-      return transformed
     })
 
-    console.log(`🎯 Returning ${transformedRecordings.length} transformed recordings`)
+    // Apply search filter if provided
+    if (search) {
+      console.log(`🔍 Applying search filter: "${search}"`)
+      transformedRecordings = transformedRecordings.filter(rec => 
+        rec.phone_number.includes(search) ||
+        rec.response_category.toLowerCase().includes(search.toLowerCase()) ||
+        rec.speech_text.toLowerCase().includes(search.toLowerCase()) ||
+        rec.filename.toLowerCase().includes(search.toLowerCase())
+      )
+      console.log(`📊 ${transformedRecordings.length} recordings after search filter`)
+    }
+
+    // Sort recordings by timestamp (newest first)
+    transformedRecordings.sort((a, b) => {
+      return new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+    })
+
+    const totalRecordings = transformedRecordings.length
+    const totalPages = Math.ceil(totalRecordings / limit)
+    
+    // Apply pagination
+    const startIndex = (page - 1) * limit
+    const endIndex = startIndex + limit
+    const paginatedRecordings = transformedRecordings.slice(startIndex, endIndex)
+
+    console.log(`📊 Pagination applied:`)
+    console.log(`   - Total records: ${totalRecordings}`)
+    console.log(`   - Page ${page} of ${totalPages}`)
+    console.log(`   - Showing records ${startIndex + 1}-${Math.min(endIndex, totalRecordings)}`)
+    console.log(`   - Records in this page: ${paginatedRecordings.length}`)
 
     return NextResponse.json({ 
-      recordings: transformedRecordings,
-      total: transformedRecordings.length,
+      recordings: paginatedRecordings,
+      total: totalRecordings,
+      page: page,
+      limit: limit,
+      totalPages: totalPages,
+      hasNextPage: page < totalPages,
+      hasPrevPage: page > 1,
       client_id: clientId,
       client_name: client_name,
       extension: extension,
       date: date,
+      search: search || undefined,
       source: 'external_api',
       api_url: fetch_recording_url, // Return the base API URL
       success: true
@@ -198,7 +265,11 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ 
       error: 'Internal server error',
       details: error.message,
-      recordings: []
+      recordings: [],
+      total: 0,
+      page: page || 1,
+      limit: limit || 50,
+      totalPages: 0
     }, { status: 500 })
   }
 }
