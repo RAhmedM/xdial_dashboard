@@ -1,0 +1,18 @@
+# Python bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environment files
+.env
+.env.prod
+.env.production
+.env.local
+
+# Virtual environment
+venv/
+.venv/
+
+# SQL migrations
+migrations/
