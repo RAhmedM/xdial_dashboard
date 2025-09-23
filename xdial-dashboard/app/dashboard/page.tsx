@@ -5,6 +5,7 @@ import { useState, useEffect } from "react"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { AuthWrapper } from "@/components/auth-wrapper"
 import { Toaster } from "@/components/ui/toaster"
+import { TranscriptPopup } from "@/components/transcript-popup"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -25,6 +26,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  FileText,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
@@ -47,6 +49,7 @@ interface Call {
   recording_url: string
   recording_length: number
   list_id: string | null
+  final_transcription: string | null
   client_name: string
 }
 
@@ -135,6 +138,25 @@ export default function DashboardPage() {
   const [sortField, setSortField] = useState<SortField>('timestamp')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [selectAllOutcomes, setSelectAllOutcomes] = useState(false)
+  const [transcriptPopup, setTranscriptPopup] = useState<{
+    isOpen: boolean
+    transcript: string | null
+    callId: number
+    phoneNumber: string
+    responseCategory: string
+    timestamp: string
+    clientName: string
+    listId: string | null
+  }>({
+    isOpen: false,
+    transcript: null,
+    callId: 0,
+    phoneNumber: '',
+    responseCategory: '',
+    timestamp: '',
+    clientName: '',
+    listId: null
+  })
 
   const { toast } = useToast()
 
@@ -292,6 +314,32 @@ export default function DashboardPage() {
         variant: "destructive"
       })
     }
+  }
+
+  const handleViewTranscript = (call: Call) => {
+    setTranscriptPopup({
+      isOpen: true,
+      transcript: call.final_transcription,
+      callId: call.call_id,
+      phoneNumber: call.phone_number,
+      responseCategory: call.response_category,
+      timestamp: call.timestamp,
+      clientName: call.client_name,
+      listId: call.list_id
+    })
+  }
+
+  const handleCloseTranscript = () => {
+    setTranscriptPopup({
+      isOpen: false,
+      transcript: null,
+      callId: 0,
+      phoneNumber: '',
+      responseCategory: '',
+      timestamp: '',
+      clientName: '',
+      listId: null
+    })
   }
 
   const getCategoryColor = (category: string) => {
@@ -587,7 +635,7 @@ export default function DashboardPage() {
                               {getSortIcon('timestamp')}
                             </div>
                           </th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Action</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Transcript</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -609,10 +657,11 @@ export default function DashboardPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handlePlayRecording(call.recording_url)}
-                                disabled={!call.recording_url}
+                                onClick={() => handleViewTranscript(call)}
+                                className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 flex items-center gap-2"
                               >
-                                <Play className="h-4 w-4" />
+                                <FileText className="h-4 w-4" />
+                                {call.final_transcription ? 'View Transcript' : 'No Transcript'}
                               </Button>
                             </td>
                           </tr>
@@ -685,6 +734,17 @@ export default function DashboardPage() {
         </main>
         
         <Toaster />
+        <TranscriptPopup
+          isOpen={transcriptPopup.isOpen}
+          onClose={handleCloseTranscript}
+          transcript={transcriptPopup.transcript}
+          callId={transcriptPopup.callId}
+          phoneNumber={transcriptPopup.phoneNumber}
+          responseCategory={transcriptPopup.responseCategory}
+          timestamp={transcriptPopup.timestamp}
+          clientName={transcriptPopup.clientName}
+          listId={transcriptPopup.listId}
+        />
       </div>
     </AuthWrapper>
   )

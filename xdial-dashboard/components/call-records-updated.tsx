@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Play, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Play, ChevronLeft, ChevronRight, FileText } from 'lucide-react'
 import { useToast } from "@/hooks/use-toast"
+import { TranscriptPopup } from "@/components/transcript-popup"
 
 interface Call {
   call_id: number
@@ -16,6 +17,7 @@ interface Call {
   recording_url: string
   recording_length: number
   list_id: string | null  // Added List_id field
+  final_transcription: string | null  // Added final_transcription field
   client_name: string
 }
 
@@ -41,6 +43,25 @@ export function CallRecordsUpdated({ filters = {}, user, userType }: CallRecords
     limit: 50,
     total: 0,
     totalPages: 0,
+  })
+  const [transcriptPopup, setTranscriptPopup] = useState<{
+    isOpen: boolean
+    transcript: string | null
+    callId: number
+    phoneNumber: string
+    responseCategory: string
+    timestamp: string
+    clientName: string
+    listId: string | null
+  }>({
+    isOpen: false,
+    transcript: null,
+    callId: 0,
+    phoneNumber: '',
+    responseCategory: '',
+    timestamp: '',
+    clientName: '',
+    listId: null
   })
 
   const { toast } = useToast()
@@ -148,6 +169,32 @@ export function CallRecordsUpdated({ filters = {}, user, userType }: CallRecords
     setPagination(prev => ({ ...prev, page: newPage }))
   }
 
+  const handleViewTranscript = (call: Call) => {
+    setTranscriptPopup({
+      isOpen: true,
+      transcript: call.final_transcription,
+      callId: call.call_id,
+      phoneNumber: call.phone_number,
+      responseCategory: call.response_category,
+      timestamp: call.timestamp,
+      clientName: call.client_name,
+      listId: call.list_id
+    })
+  }
+
+  const handleCloseTranscript = () => {
+    setTranscriptPopup({
+      isOpen: false,
+      transcript: null,
+      callId: 0,
+      phoneNumber: '',
+      responseCategory: '',
+      timestamp: '',
+      clientName: '',
+      listId: null
+    })
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -172,7 +219,7 @@ export function CallRecordsUpdated({ filters = {}, user, userType }: CallRecords
                     <th className="text-left py-3 px-4 font-medium text-gray-700">List ID</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-700">Response Category</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-700">Timestamp</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Action</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Transcript</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -191,13 +238,14 @@ export function CallRecordsUpdated({ filters = {}, user, userType }: CallRecords
                       </td>
                       <td className="py-3 px-4 text-sm text-gray-600">{formatTimestamp(call.timestamp)}</td>
                       <td className="py-3 px-4">
-                        <Button 
-                          variant="ghost" 
+                        <Button
+                          variant="ghost"
                           size="sm"
-                          onClick={() => handlePlayRecording(call.recording_url)}
-                          disabled={!call.recording_url}
+                          onClick={() => handleViewTranscript(call)}
+                          className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 flex items-center gap-2"
                         >
-                          <Play className="h-4 w-4" />
+                          <FileText className="h-4 w-4" />
+                          {call.final_transcription ? 'View Transcript' : 'No Transcript'}
                         </Button>
                       </td>
                     </tr>
@@ -266,6 +314,17 @@ export function CallRecordsUpdated({ filters = {}, user, userType }: CallRecords
           </>
         )}
       </CardContent>
+      <TranscriptPopup
+        isOpen={transcriptPopup.isOpen}
+        onClose={handleCloseTranscript}
+        transcript={transcriptPopup.transcript}
+        callId={transcriptPopup.callId}
+        phoneNumber={transcriptPopup.phoneNumber}
+        responseCategory={transcriptPopup.responseCategory}
+        timestamp={transcriptPopup.timestamp}
+        clientName={transcriptPopup.clientName}
+        listId={transcriptPopup.listId}
+      />
     </Card>
   )
 }

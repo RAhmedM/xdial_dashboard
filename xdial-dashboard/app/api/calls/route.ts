@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
     const countResult = await pool.query(countQuery, params)
     const total = parseInt(countResult.rows[0].total)
 
-    // Then get the actual data with pagination - Updated to include list_id
+    // Then get the actual data with pagination - Updated to include list_id and final_transcription
     const dataQuery = `
       SELECT 
         c.call_id,
@@ -88,6 +88,7 @@ export async function GET(request: NextRequest) {
         c.recording_url,
         c.recording_length,
         c.list_id,
+        c.final_transcription,
         COALESCE(cl.client_name, 'Unknown Client') as client_name
       FROM calls c 
       LEFT JOIN clients cl ON c.client_id = cl.client_id 
