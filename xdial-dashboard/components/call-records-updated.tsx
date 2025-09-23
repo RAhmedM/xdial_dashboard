@@ -123,8 +123,9 @@ export function CallRecordsUpdated({ filters = {}, user, userType }: CallRecords
         day: '2-digit',
         hour: '2-digit',
         minute: '2-digit',
-        timeZoneName: 'short'
-      })
+        second: '2-digit',
+        timeZone: 'America/New_York'
+      }) + ' EST/EDT'
     } catch (error) {
       return timestamp
     }
@@ -199,6 +200,9 @@ export function CallRecordsUpdated({ filters = {}, user, userType }: CallRecords
     <Card>
       <CardHeader>
         <CardTitle>Call Records ({pagination.total} total)</CardTitle>
+        <p className="text-sm text-gray-600 mt-2">
+          All times are displayed in US Eastern Time (EST/EDT)
+        </p>
       </CardHeader>
       <CardContent>
         {loading ? (
@@ -218,7 +222,7 @@ export function CallRecordsUpdated({ filters = {}, user, userType }: CallRecords
                     <th className="text-left py-3 px-4 font-medium text-gray-700">Phone No</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-700">List ID</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-700">Response Category</th>
-                    <th className="text-left py-3 px-4 font-medium text-gray-700">Timestamp</th>
+                    <th className="text-left py-3 px-4 font-medium text-gray-700">Timestamp (US EST/EDT)</th>
                     <th className="text-left py-3 px-4 font-medium text-gray-700">Transcript</th>
                   </tr>
                 </thead>

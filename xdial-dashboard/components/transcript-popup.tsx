@@ -90,7 +90,8 @@ export function TranscriptPopup({ isOpen, onClose, transcript, callId, phoneNumb
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
-      })
+        timeZone: 'America/New_York'
+      }) + ' EST/EDT'
     } catch (error) {
       return timestamp
     }

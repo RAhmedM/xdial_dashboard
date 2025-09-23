@@ -179,7 +179,7 @@ export default function DashboardPage() {
     fetchOutcomeCounts()
   }, [filters, pagination.page, pagination.limit, sortField, sortDirection])
 
-  // Format timestamp - just display as is without timezone adjustments
+  // Format timestamp - force US timezone display
   const formatTimestamp = (timestamp: string) => {
     if (!timestamp) return 'N/A'
     
@@ -192,7 +192,8 @@ export default function DashboardPage() {
         hour: '2-digit',
         minute: '2-digit',
         second: '2-digit',
-      })
+        timeZone: 'America/New_York'
+      }) + ' EST/EDT'
     } catch (error) {
       console.error('Error formatting timestamp:', error)
       return timestamp
@@ -211,11 +212,12 @@ export default function DashboardPage() {
       params.append('list_id_search', filters.listIdSearch)
     }
 
-    // Add date range filters - no timezone adjustments
+    // Add date range filters - treat as US timezone
     if (filters.startDate) {
       const startDateTime = filters.startTime 
         ? `${filters.startDate}T${filters.startTime}:00`
         : `${filters.startDate}T00:00:00`
+      // Treat as US timezone - no conversion needed since database stores US time
       params.append('start_date', startDateTime)
     }
 
@@ -223,6 +225,7 @@ export default function DashboardPage() {
       const endDateTime = filters.endTime 
         ? `${filters.endDate}T${filters.endTime}:59`
         : `${filters.endDate}T23:59:59`
+      // Treat as US timezone - no conversion needed since database stores US time
       params.append('end_date', endDateTime)
     }
 
@@ -436,6 +439,9 @@ export default function DashboardPage() {
                 <Search className="h-5 w-5" />
                 Search & Filter Calls
               </CardTitle>
+              <p className="text-sm text-gray-600 mt-2">
+                All times are displayed in US Eastern Time (EST/EDT)
+              </p>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Search and Reset Row */}
@@ -466,7 +472,7 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Start Date
+                    Start Date (US EST/EDT)
                   </label>
                   <Input
                     type="date"
@@ -476,7 +482,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Start Time
+                    Start Time (US EST/EDT)
                   </label>
                   <Input
                     type="time"
@@ -486,7 +492,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    End Date
+                    End Date (US EST/EDT)
                   </label>
                   <Input
                     type="date"
@@ -496,7 +502,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    End Time
+                    End Time (US EST/EDT)
                   </label>
                   <Input
                     type="time"
@@ -567,6 +573,9 @@ export default function DashboardPage() {
                 <Phone className="h-5 w-5" />
                 Call Records ({pagination.total} total)
               </CardTitle>
+              <p className="text-sm text-gray-600 mt-2">
+                All times are displayed in US Eastern Time (EST/EDT)
+              </p>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -631,7 +640,7 @@ export default function DashboardPage() {
                             onClick={() => handleSort('timestamp')}
                           >
                             <div className="flex items-center">
-                              Timestamp
+                              Timestamp (US EST/EDT)
                               {getSortIcon('timestamp')}
                             </div>
                           </th>
