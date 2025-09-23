@@ -1,12 +1,14 @@
+// components/admin-header.tsx
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Shield, User, BarChart } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { Shield, User, BarChart, Server } from "lucide-react"
+import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
 
 export function AdminHeader() {
   const router = useRouter()
+  const pathname = usePathname()
 
   const handleLogout = () => {
     sessionStorage.removeItem('user')
@@ -26,12 +28,36 @@ export function AdminHeader() {
         </div>
 
         <div className="flex items-center gap-3">
+          <Link href="/admin">
+            <Button 
+              variant={pathname === '/admin' ? 'default' : 'outline'}
+              className={pathname === '/admin' ? 'bg-purple-500 hover:bg-purple-600 text-white' : ''}
+            >
+              <Shield className="h-4 w-4 mr-2" />
+              Overview
+            </Button>
+          </Link>
+          
           <Link href="/dashboard">
-            <Button variant="outline">
+            <Button 
+              variant={pathname === '/dashboard' ? 'default' : 'outline'}
+              className={pathname === '/dashboard' ? 'bg-purple-500 hover:bg-purple-600 text-white' : ''}
+            >
               <BarChart className="h-4 w-4 mr-2" />
               Reports
             </Button>
           </Link>
+          
+          <Link href="/vicidial">
+            <Button 
+              variant={pathname === '/vicidial' ? 'default' : 'outline'}
+              className={pathname === '/vicidial' ? 'bg-purple-500 hover:bg-purple-600 text-white' : ''}
+            >
+              <Server className="h-4 w-4 mr-2" />
+              ViciDial Services
+            </Button>
+          </Link>
+          
           <Button variant="outline" size="sm" onClick={handleLogout}>
             <User className="h-4 w-4 mr-2" />
             Logout
