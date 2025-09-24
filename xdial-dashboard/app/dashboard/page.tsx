@@ -179,21 +179,29 @@ export default function DashboardPage() {
     fetchOutcomeCounts()
   }, [filters, pagination.page, pagination.limit, sortField, sortDirection])
 
-  // Format timestamp - force US timezone display
+  // Format timestamp - display exactly as stored in database (no timezone conversion)
   const formatTimestamp = (timestamp: string) => {
     if (!timestamp) return 'N/A'
     
     try {
+      // Parse the timestamp as-is without timezone interpretation
       const date = new Date(timestamp)
-      return date.toLocaleString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        timeZone: 'America/New_York'
-      }) + ' EST/EDT'
+      
+      // If the date is invalid, return the original timestamp
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date:', timestamp)
+        return timestamp
+      }
+      
+      // Format using local time components (no timezone conversion)
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const hours = String(date.getHours()).padStart(2, '0')
+      const minutes = String(date.getMinutes()).padStart(2, '0')
+      const seconds = String(date.getSeconds()).padStart(2, '0')
+      
+      return `${month}/${day}/${year}, ${hours}:${minutes}:${seconds}`
     } catch (error) {
       console.error('Error formatting timestamp:', error)
       return timestamp
@@ -278,10 +286,28 @@ export default function DashboardPage() {
   const fetchOutcomeCounts = async () => {
     try {
       const params = buildApiParams(false)
+      console.log('Fetching outcome counts with params:', params.toString())
       const response = await fetch(`/api/outcome-counts?${params}`)
-      if (!response.ok) throw new Error('Failed to fetch outcome counts')
+      
+      console.log('Outcome counts response status:', response.status)
+      console.log('Outcome counts response ok:', response.ok)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Outcome counts API error:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorText: errorText
+        })
+        console.error('Full error response:', errorText)
+        // Set empty outcome counts instead of throwing error
+        console.warn('Setting empty outcome counts due to API error')
+        setOutcomeCounts({})
+        return
+      }
 
       const data = await response.json()
+      console.log('Outcome counts data received:', data)
       setOutcomeCounts(data)
     } catch (error) {
       console.error('Error fetching outcome counts:', error)

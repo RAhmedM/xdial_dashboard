@@ -82,16 +82,24 @@ export function TranscriptPopup({ isOpen, onClose, transcript, callId, phoneNumb
     if (!timestamp) return 'N/A'
     
     try {
+      // Parse the timestamp as-is without timezone interpretation
       const date = new Date(timestamp)
-      return date.toLocaleString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        timeZone: 'America/New_York'
-      }) + ' EST/EDT'
+      
+      // If the date is invalid, return the original timestamp
+      if (isNaN(date.getTime())) {
+        console.warn('Invalid date:', timestamp)
+        return timestamp
+      }
+      
+      // Format using local time components (no timezone conversion)
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const day = String(date.getDate()).padStart(2, '0')
+      const hours = String(date.getHours()).padStart(2, '0')
+      const minutes = String(date.getMinutes()).padStart(2, '0')
+      const seconds = String(date.getSeconds()).padStart(2, '0')
+      
+      return `${month}/${day}/${year}, ${hours}:${minutes}:${seconds}`
     } catch (error) {
       return timestamp
     }
@@ -160,14 +168,6 @@ export function TranscriptPopup({ isOpen, onClose, transcript, callId, phoneNumb
                   )}
                 </Button>
               )}
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={onClose}
-                className="h-8 w-8 p-0"
-              >
-                <X className="h-4 w-4" />
-              </Button>
             </div>
           </div>
         </DialogHeader>
