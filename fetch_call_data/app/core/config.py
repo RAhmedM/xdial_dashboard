@@ -4,7 +4,8 @@ Configuration settings for the FastAPI application.
 
 import os
 from typing import Optional, List
-from pydantic import BaseSettings, validator
+from pydantic_settings import BaseSettings
+from pydantic import field_validator
 
 
 class DatabaseSettings(BaseSettings):
@@ -34,7 +35,7 @@ class DatabaseSettings(BaseSettings):
 class SecuritySettings(BaseSettings):
     """Security configuration settings."""
     
-    secret_key: str = "this-is-a-secret-key-that-is-even-more-secure-lol"
+    secret_key: str = "this-is-a-secret-key-that-is-even-more-secure-lol-hahaha"
     algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
     
@@ -45,15 +46,13 @@ class SecuritySettings(BaseSettings):
 class CorsSettings(BaseSettings):
     """CORS configuration settings."""
     
-    allowed_origins: List[str] = [
-        "https://dashboard.xdialnetworks.com",
-        "https://fetchapi.dashboard.xdialnetworks.com"
-    ]
+    allowed_origins: List[str] = ["*"]  # Allow all origins
     allow_credentials: bool = True
-    allow_methods: List[str] = ["GET", "POST", "PUT", "DELETE"]
+    allow_methods: List[str] = ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     allow_headers: List[str] = ["*"]
     
-    @validator("allowed_origins", pre=True)
+    @field_validator("allowed_origins", mode="before")
+    @classmethod
     def parse_origins(cls, v):
         """Parse origins from environment variable."""
         if isinstance(v, str):
@@ -102,7 +101,7 @@ class ProductionSettings(BaseSettings):
     debug: bool = False
     reload: bool = False
     host: str = "127.0.0.1"
-    port: int = 8001  # Different port to avoid conflicts with development server
+    port: int = 8000  # Different port to avoid conflicts with development server
     
     database: DatabaseSettings = DatabaseSettings()
     security: SecuritySettings = SecuritySettings()

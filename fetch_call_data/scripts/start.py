@@ -24,14 +24,23 @@ def run_development():
     subprocess.run([sys.executable, "trunk.py"], check=True)
 
 def run_production():
-    """Run in production mode."""
-    print("Starting production server...")
+    """Run in production mode with Gunicorn."""
+    print("Starting production server with Gunicorn...")
     os.environ.setdefault("ENVIRONMENT", "production")
     subprocess.run([
-        "uvicorn", "trunk:app",
-        "--host", "0.0.0.0",
-        "--port", "8000",
-        "--workers", "4"
+        "gunicorn", "trunk:app",
+        "--bind", "0.0.0.0:8000",
+        "--workers", "4",
+        "--worker-class", "uvicorn.workers.UvicornWorker",
+        "--worker-connections", "1000",
+        "--timeout", "30",
+        "--keep-alive", "2",
+        "--max-requests", "1000",
+        "--max-requests-jitter", "50",
+        "--preload",
+        "--access-logfile", "/root/test_dashboard/xdial_dashboard/fetch_call_data/logs/access.log",
+        "--error-logfile", "/root/test_dashboard/xdial_dashboard/fetch_call_data/logs/error.log",
+        "--log-level", "info"
     ], check=True)
 
 if __name__ == "__main__":
