@@ -4,7 +4,7 @@ module.exports = {
     script: 'scripts/start.py',
     args: 'prod',
     cwd: '/root/xdial_dashboard/fetch_call_data',
-    interpreter: 'python3',
+    interpreter: '/root/xdial_dashboard/fetch_call_data/.venv/bin/python',
     instances: 1,
     autorestart: true,
     watch: false,

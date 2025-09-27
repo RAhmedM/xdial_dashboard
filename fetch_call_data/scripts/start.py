@@ -27,8 +27,14 @@ def run_production():
     """Run in production mode with Gunicorn."""
     print("Starting production server with Gunicorn...")
     os.environ.setdefault("ENVIRONMENT", "production")
+    
+    # Use gunicorn from virtual environment if it exists
+    gunicorn_path = ".venv/bin/gunicorn"
+    if not os.path.exists(gunicorn_path):
+        gunicorn_path = "gunicorn"  # Fallback to system gunicorn
+    
     subprocess.run([
-        "gunicorn", "trunk:app",
+        gunicorn_path, "trunk:app",
         "--bind", "0.0.0.0:8000",
         "--workers", "4",
         "--worker-class", "uvicorn.workers.UvicornWorker",
