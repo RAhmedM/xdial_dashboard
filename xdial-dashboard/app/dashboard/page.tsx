@@ -5,6 +5,7 @@ import { useState, useEffect } from "react"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { AuthWrapper } from "@/components/auth-wrapper"
 import { Toaster } from "@/components/ui/toaster"
+import { TranscriptPopup } from "@/components/transcript-popup"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -25,6 +26,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  FileText,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
@@ -47,6 +49,7 @@ interface Call {
   recording_url: string
   recording_length: number
   list_id: string | null
+  final_transcription: string | null
   client_name: string
 }
 
@@ -135,6 +138,25 @@ export default function DashboardPage() {
   const [sortField, setSortField] = useState<SortField>('timestamp')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [selectAllOutcomes, setSelectAllOutcomes] = useState(false)
+  const [transcriptPopup, setTranscriptPopup] = useState<{
+    isOpen: boolean
+    transcript: string | null
+    callId: number
+    phoneNumber: string
+    responseCategory: string
+    timestamp: string
+    clientName: string
+    listId: string | null
+  }>({
+    isOpen: false,
+    transcript: null,
+    callId: 0,
+    phoneNumber: '',
+    responseCategory: '',
+    timestamp: '',
+    clientName: '',
+    listId: null
+  })
 
   const { toast } = useToast()
 
@@ -152,25 +174,30 @@ export default function DashboardPage() {
     }
   }, [])
 
-  useEffect(() => {
+useEffect(() => {
+  // Only fetch if user data is loaded
+  if (user && userType) {
     fetchCalls()
     fetchOutcomeCounts()
-  }, [filters, pagination.page, pagination.limit, sortField, sortDirection])
-
-  // Format timestamp - just display as is without timezone adjustments
+  }
+}, [filters, pagination.page, pagination.limit, sortField, sortDirection, user, userType])
+  // Format timestamp - display exactly as stored in database (no timezone conversion)
   const formatTimestamp = (timestamp: string) => {
     if (!timestamp) return 'N/A'
     
     try {
-      const date = new Date(timestamp)
-      return date.toLocaleString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-      })
+      // Parse timestamp as raw string without timezone interpretation
+      // Expected format: YYYY-MM-DD HH:MM:SS or YYYY-MM-DDTHH:MM:SS
+      const match = timestamp.match(/^(\d{4})-(\d{2})-(\d{2})[T\s]+(\d{2}):(\d{2}):(\d{2})/)
+      
+      if (match) {
+        const [, year, month, day, hours, minutes, seconds] = match
+        return `${month}/${day}/${year}, ${hours}:${minutes}:${seconds}`
+      }
+      
+      // If format doesn't match expected pattern, return as-is
+      console.warn('Unexpected timestamp format:', timestamp)
+      return timestamp
     } catch (error) {
       console.error('Error formatting timestamp:', error)
       return timestamp
@@ -189,11 +216,12 @@ export default function DashboardPage() {
       params.append('list_id_search', filters.listIdSearch)
     }
 
-    // Add date range filters - no timezone adjustments
+    // Add date range filters - treat as US timezone
     if (filters.startDate) {
       const startDateTime = filters.startTime 
         ? `${filters.startDate}T${filters.startTime}:00`
         : `${filters.startDate}T00:00:00`
+      // Treat as US timezone - no conversion needed since database stores US time
       params.append('start_date', startDateTime)
     }
 
@@ -201,6 +229,7 @@ export default function DashboardPage() {
       const endDateTime = filters.endTime 
         ? `${filters.endDate}T${filters.endTime}:59`
         : `${filters.endDate}T23:59:59`
+      // Treat as US timezone - no conversion needed since database stores US time
       params.append('end_date', endDateTime)
     }
 
@@ -253,10 +282,28 @@ export default function DashboardPage() {
   const fetchOutcomeCounts = async () => {
     try {
       const params = buildApiParams(false)
+      console.log('Fetching outcome counts with params:', params.toString())
       const response = await fetch(`/api/outcome-counts?${params}`)
-      if (!response.ok) throw new Error('Failed to fetch outcome counts')
+      
+      console.log('Outcome counts response status:', response.status)
+      console.log('Outcome counts response ok:', response.ok)
+      
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error('Outcome counts API error:', {
+          status: response.status,
+          statusText: response.statusText,
+          errorText: errorText
+        })
+        console.error('Full error response:', errorText)
+        // Set empty outcome counts instead of throwing error
+        console.warn('Setting empty outcome counts due to API error')
+        setOutcomeCounts({})
+        return
+      }
 
       const data = await response.json()
+      console.log('Outcome counts data received:', data)
       setOutcomeCounts(data)
     } catch (error) {
       console.error('Error fetching outcome counts:', error)
@@ -292,6 +339,32 @@ export default function DashboardPage() {
         variant: "destructive"
       })
     }
+  }
+
+  const handleViewTranscript = (call: Call) => {
+    setTranscriptPopup({
+      isOpen: true,
+      transcript: call.final_transcription,
+      callId: call.call_id,
+      phoneNumber: call.phone_number,
+      responseCategory: call.response_category,
+      timestamp: call.timestamp,
+      clientName: call.client_name,
+      listId: call.list_id
+    })
+  }
+
+  const handleCloseTranscript = () => {
+    setTranscriptPopup({
+      isOpen: false,
+      transcript: null,
+      callId: 0,
+      phoneNumber: '',
+      responseCategory: '',
+      timestamp: '',
+      clientName: '',
+      listId: null
+    })
   }
 
   const getCategoryColor = (category: string) => {
@@ -388,6 +461,9 @@ export default function DashboardPage() {
                 <Search className="h-5 w-5" />
                 Search & Filter Calls
               </CardTitle>
+              <p className="text-sm text-gray-600 mt-2">
+                All times are displayed in US Eastern Time (EST/EDT)
+              </p>
             </CardHeader>
             <CardContent className="space-y-4">
               {/* Search and Reset Row */}
@@ -418,7 +494,7 @@ export default function DashboardPage() {
               <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Start Date
+                    Start Date (US EST/EDT)
                   </label>
                   <Input
                     type="date"
@@ -428,7 +504,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Start Time
+                    Start Time (US EST/EDT)
                   </label>
                   <Input
                     type="time"
@@ -438,7 +514,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    End Date
+                    End Date (US EST/EDT)
                   </label>
                   <Input
                     type="date"
@@ -448,7 +524,7 @@ export default function DashboardPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    End Time
+                    End Time (US EST/EDT)
                   </label>
                   <Input
                     type="time"
@@ -519,6 +595,9 @@ export default function DashboardPage() {
                 <Phone className="h-5 w-5" />
                 Call Records ({pagination.total} total)
               </CardTitle>
+              <p className="text-sm text-gray-600 mt-2">
+                All times are displayed in US Eastern Time (EST/EDT)
+              </p>
             </CardHeader>
             <CardContent>
               {loading ? (
@@ -583,11 +662,11 @@ export default function DashboardPage() {
                             onClick={() => handleSort('timestamp')}
                           >
                             <div className="flex items-center">
-                              Timestamp
+                              Timestamp (US EST/EDT)
                               {getSortIcon('timestamp')}
                             </div>
                           </th>
-                          <th className="text-left py-3 px-4 font-medium text-gray-700">Action</th>
+                          <th className="text-left py-3 px-4 font-medium text-gray-700">Transcript</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -609,10 +688,11 @@ export default function DashboardPage() {
                               <Button
                                 variant="ghost"
                                 size="sm"
-                                onClick={() => handlePlayRecording(call.recording_url)}
-                                disabled={!call.recording_url}
+                                onClick={() => handleViewTranscript(call)}
+                                className="text-blue-600 hover:text-blue-800 hover:bg-blue-50 flex items-center gap-2"
                               >
-                                <Play className="h-4 w-4" />
+                                <FileText className="h-4 w-4" />
+                                {call.final_transcription ? 'View Transcript' : 'No Transcript'}
                               </Button>
                             </td>
                           </tr>
@@ -685,6 +765,17 @@ export default function DashboardPage() {
         </main>
         
         <Toaster />
+        <TranscriptPopup
+          isOpen={transcriptPopup.isOpen}
+          onClose={handleCloseTranscript}
+          transcript={transcriptPopup.transcript}
+          callId={transcriptPopup.callId}
+          phoneNumber={transcriptPopup.phoneNumber}
+          responseCategory={transcriptPopup.responseCategory}
+          timestamp={transcriptPopup.timestamp}
+          clientName={transcriptPopup.clientName}
+          listId={transcriptPopup.listId}
+        />
       </div>
     </AuthWrapper>
   )
