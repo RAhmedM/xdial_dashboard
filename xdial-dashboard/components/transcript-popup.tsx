@@ -82,25 +82,20 @@ export function TranscriptPopup({ isOpen, onClose, transcript, callId, phoneNumb
     if (!timestamp) return 'N/A'
     
     try {
-      // Parse the timestamp as-is without timezone interpretation
-      const date = new Date(timestamp)
+      // Parse timestamp as raw string without timezone interpretation
+      // Expected format: YYYY-MM-DD HH:MM:SS or YYYY-MM-DDTHH:MM:SS
+      const match = timestamp.match(/^(\d{4})-(\d{2})-(\d{2})[T\s]+(\d{2}):(\d{2}):(\d{2})/)
       
-      // If the date is invalid, return the original timestamp
-      if (isNaN(date.getTime())) {
-        console.warn('Invalid date:', timestamp)
-        return timestamp
+      if (match) {
+        const [, year, month, day, hours, minutes, seconds] = match
+        return `${month}/${day}/${year}, ${hours}:${minutes}:${seconds}`
       }
       
-      // Format using local time components (no timezone conversion)
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, '0')
-      const day = String(date.getDate()).padStart(2, '0')
-      const hours = String(date.getHours()).padStart(2, '0')
-      const minutes = String(date.getMinutes()).padStart(2, '0')
-      const seconds = String(date.getSeconds()).padStart(2, '0')
-      
-      return `${month}/${day}/${year}, ${hours}:${minutes}:${seconds}`
+      // If format doesn't match expected pattern, return as-is
+      console.warn('Unexpected timestamp format:', timestamp)
+      return timestamp
     } catch (error) {
+      console.error('Error formatting timestamp:', error)
       return timestamp
     }
   }

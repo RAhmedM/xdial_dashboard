@@ -100,7 +100,7 @@ export async function GET(request: NextRequest) {
           timestamp: timestamp,
           duration: rec.duration || '00:00:00',
           phone_number: rec.number,
-          response_category: 'UNKNOWN', // Will try to match with database calls
+          response_category: 'Unknown', // Will try to match with database calls
           speech_text: '',
           audio_url: rec.url,
           size: rec.size || '',

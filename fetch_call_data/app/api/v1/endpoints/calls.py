@@ -32,7 +32,7 @@ async def get_calls(
         # get paginated calls
         query = """
             SELECT call_id, client_id, phone_number, response_category, 
-                   timestamp, recording_url, recording_length, list_id, final_transcription
+                timestamp, recording_url, recording_length, list_id, final_transcription
             FROM calls 
             ORDER BY timestamp DESC 
             LIMIT :limit OFFSET :offset
@@ -81,7 +81,7 @@ async def get_call(
     try:
         query = """
             SELECT call_id, client_id, phone_number, response_category, 
-                   timestamp, recording_url, recording_length, list_id, final_transcription
+                timestamp, recording_url, recording_length, list_id, final_transcription
             FROM calls 
             WHERE call_id = :call_id
         """
@@ -128,7 +128,7 @@ async def create_call(
         # insert new call
         insert_query = """
             INSERT INTO calls (client_id, phone_number, response_category, 
-                             recording_url, recording_length, list_id, final_transcription)
+                            recording_url, recording_length, list_id, final_transcription)
             VALUES (:client_id, :phone_number, :response_category, 
                     :recording_url, :recording_length, :list_id, :final_transcription)
             RETURNING *
@@ -201,7 +201,7 @@ async def create_calls_batch(
             
             insert_query = """
                 INSERT INTO calls (client_id, phone_number, response_category, 
-                                 recording_url, recording_length, list_id, final_transcription)
+                                recording_url, recording_length, list_id, final_transcription)
                 VALUES (:client_id, :phone_number, :response_category, 
                         :recording_url, :recording_length, :list_id, :final_transcription)
                 RETURNING *

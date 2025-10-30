@@ -52,12 +52,24 @@ export async function GET(request: NextRequest) {
 
     // Response categories filter
     if (responseCategories.length > 0) {
-      const categoryPlaceholders = responseCategories.map(() => {
+      // Handle case sensitivity and specific mappings
+      const dbCategories = responseCategories.map(category => {
+        switch (category) {
+          case 'unknown':
+            return 'Unknown'
+          case 'user-silent':
+            return 'User_Silent'
+          default:
+            return category // Most categories match exactly
+        }
+      })
+      
+      const categoryPlaceholders = dbCategories.map(() => {
         paramCount++
         return `$${paramCount}`
       }).join(',')
       conditions.push(`c.response_category IN (${categoryPlaceholders})`)
-      params.push(...responseCategories)
+      params.push(...dbCategories)
     }
 
     const whereClause = conditions.length > 0 ? 

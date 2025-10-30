@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { Pool } from 'pg'
+import { FILTER_TO_DB_MAPPING } from '@/lib/response-categories'
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -52,14 +53,27 @@ export async function GET(request: NextRequest) {
       params.push(...listIds)
     }
 
-    // Add response category filters
+    // Add response category filters - convert frontend filter values to database values
     if (responseCategories.length > 0) {
-      const categoryPlaceholders = responseCategories.map(() => {
-        paramCount++
-        return `$${paramCount}`
-      }).join(',')
-      conditions.push(`c.response_category IN (${categoryPlaceholders})`)
-      params.push(...responseCategories)
+      // Convert filter categories to database values
+      const dbCategories: string[] = []
+      responseCategories.forEach(filterCategory => {
+        const dbValues = FILTER_TO_DB_MAPPING[filterCategory as keyof typeof FILTER_TO_DB_MAPPING]
+        if (dbValues) {
+          dbCategories.push(...dbValues)
+        } else {
+          console.warn(`Unknown filter category: ${filterCategory}`)
+        }
+      })
+      
+      if (dbCategories.length > 0) {
+        const categoryPlaceholders = dbCategories.map(() => {
+          paramCount++
+          return `$${paramCount}`
+        }).join(',')
+        conditions.push(`c.response_category IN (${categoryPlaceholders})`)
+        params.push(...dbCategories)
+      }
     }
 
     const whereClause = conditions.length > 0 ? 

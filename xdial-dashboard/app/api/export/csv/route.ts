@@ -26,9 +26,20 @@ function formatTimestamp(timestamp: string): string {
   if (!timestamp) return ''
   
   try {
-    const date = new Date(timestamp)
-    return date.toISOString().replace('T', ' ').split('.')[0] // Format: YYYY-MM-DD HH:MM:SS
+    // Parse timestamp as raw string without timezone interpretation
+    // Expected format: YYYY-MM-DD HH:MM:SS or YYYY-MM-DDTHH:MM:SS
+    const match = timestamp.match(/^(\d{4})-(\d{2})-(\d{2})[T\s]+(\d{2}):(\d{2}):(\d{2})/)
+    
+    if (match) {
+      const [, year, month, day, hours, minutes, seconds] = match
+      return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+    }
+    
+    // If format doesn't match expected pattern, return as-is
+    console.warn('Unexpected timestamp format:', timestamp)
+    return timestamp
   } catch (error) {
+    console.error('Error formatting timestamp:', error)
     return timestamp
   }
 }
