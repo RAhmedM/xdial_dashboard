@@ -558,8 +558,8 @@ export default function RecordingsPage() {
               Listen to and download your call recordings
             </p>
           </div>
-
-          {/* Debug Info (temporary) */}
+        
+        {/*  {/* Debug Info (temporary) }
           {process.env.NODE_ENV === 'development' && (
             <Card className="mb-6 border-gray-200 bg-gray-50">
               <CardContent className="pt-4">
@@ -588,7 +588,7 @@ export default function RecordingsPage() {
               </CardContent>
             </Card>
           )}
-
+          */}
           {/* Access Control Notice for Admin */}
           {userType === 'admin' && (
             <Alert className="mb-6 border-blue-200 bg-blue-50">
