@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Phone, User, Lock, Eye, EyeOff } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { setUserInStorage } from "@/lib/utils"
 
 export default function LoginPage() {
   const [formData, setFormData] = useState({
@@ -64,9 +65,8 @@ export default function LoginPage() {
       }
 
       if (data.success) {
-        // Store user info in sessionStorage (you might want to use a more secure method)
-        sessionStorage.setItem('user', JSON.stringify(data.user))
-        sessionStorage.setItem('userType', data.userType)
+        // Store user info in both localStorage and sessionStorage (works across tabs)
+        setUserInStorage(data.user, data.userType)
         
         toast({
           title: "Login Successful",

@@ -10,6 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { FileAudio, Play, Pause, Download, Search, Calendar, AlertTriangle, RefreshCcw, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import { DashboardHeader } from '@/components/dashboard-header'
+import { getUserFromStorage, getUserTypeFromStorage } from '@/lib/utils'
 
 interface Recording {
   id: string
@@ -97,17 +98,17 @@ export default function RecordingsPage() {
   // Get user info on component mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storedUser = sessionStorage.getItem('user')
-      const storedUserType = sessionStorage.getItem('userType')
+      // Use utility functions that check both localStorage and sessionStorage
+      const storedUser = getUserFromStorage()
+      const storedUserType = getUserTypeFromStorage()
       
-      console.log('Raw sessionStorage data:')
+      console.log('User data loaded:')
       console.log('user:', storedUser)
       console.log('userType:', storedUserType)
       
       if (storedUser) {
-        const parsedUser = JSON.parse(storedUser)
-        console.log('Parsed user object:', parsedUser)
-        setUser(parsedUser)
+        console.log('Parsed user object:', storedUser)
+        setUser(storedUser)
         
         // Debug API call (only in development)
         if (process.env.NODE_ENV === 'development') {
@@ -115,10 +116,10 @@ export default function RecordingsPage() {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              user: parsedUser,
+              user: storedUser,
               userType: storedUserType,
               rawSession: {
-                user: storedUser,
+                user: JSON.stringify(storedUser),
                 userType: storedUserType
               }
             })

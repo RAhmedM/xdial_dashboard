@@ -29,6 +29,7 @@ import {
   Loader2
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { getUserFromStorage, getUserTypeFromStorage } from "@/lib/utils"
 
 interface ExportFilters {
   selectedListIds: string[]
@@ -123,11 +124,12 @@ export default function DataExportPage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storedUser = sessionStorage.getItem('user')
-      const storedUserType = sessionStorage.getItem('userType')
+      // Use utility functions that check both localStorage and sessionStorage
+      const storedUser = getUserFromStorage()
+      const storedUserType = getUserTypeFromStorage()
       
       if (storedUser) {
-        setUser(JSON.parse(storedUser))
+        setUser(storedUser)
       }
       if (storedUserType) {
         setUserType(storedUserType)

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Phone, User, Building2, FileAudio, BarChart, Download } from "lucide-react"
 import { useRouter, usePathname } from "next/navigation"
 import Link from "next/link"
+import { getUserFromStorage, getUserTypeFromStorage, clearUserFromStorage } from "@/lib/utils"
 
 interface UserData {
   id?: number
@@ -23,11 +24,12 @@ export function DashboardHeader() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storedUser = sessionStorage.getItem('user')
-      const storedUserType = sessionStorage.getItem('userType')
+      // Use utility functions that check both localStorage and sessionStorage
+      const storedUser = getUserFromStorage()
+      const storedUserType = getUserTypeFromStorage()
       
       if (storedUser) {
-        setUser(JSON.parse(storedUser))
+        setUser(storedUser)
       }
       if (storedUserType) {
         setUserType(storedUserType)
@@ -36,7 +38,8 @@ export function DashboardHeader() {
   }, [])
 
   const handleLogout = () => {
-    sessionStorage.clear()
+    // Clear user data from both localStorage and sessionStorage
+    clearUserFromStorage()
     router.push('/login')
   }
 

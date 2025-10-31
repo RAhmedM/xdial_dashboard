@@ -27,8 +27,15 @@ import {
   ArrowUp,
   ArrowDown,
   FileText,
+  Shield,
+  MicOff,
+  VolumeX,
+  Circle,
+  PhoneOff,
+  Minus,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { getUserFromStorage, getUserTypeFromStorage } from "@/lib/utils"
 
 interface FilterState {
   search: string
@@ -105,6 +112,42 @@ const callOutcomes = [
     icon: HelpCircle,
     iconColor: "text-gray-500",
   },
+  {
+    id: "Honeypot",
+    title: "Honeypot",
+    icon: Shield,
+    iconColor: "text-purple-500",
+  },
+  {
+    id: "User_Silent",
+    title: "User Silent",
+    icon: MicOff,
+    iconColor: "text-slate-500",
+  },
+  {
+    id: "INAUDIBLE",
+    title: "INAUDIBLE",
+    icon: VolumeX,
+    iconColor: "text-orange-500",
+  },
+  {
+    id: "neutral",
+    title: "Neutral",
+    icon: Circle,
+    iconColor: "text-gray-400",
+  },
+  {
+    id: "NA",
+    title: "NA",
+    icon: Minus,
+    iconColor: "text-gray-600",
+  },
+  {
+    id: "USER-HUNGUP",
+    title: "User Hung Up",
+    icon: PhoneOff,
+    iconColor: "text-red-600",
+  },
 ]
 
 // Get today's date in YYYY-MM-DD format
@@ -162,11 +205,12 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storedUser = sessionStorage.getItem('user')
-      const storedUserType = sessionStorage.getItem('userType')
+      // Use utility functions that check both localStorage and sessionStorage
+      const storedUser = getUserFromStorage()
+      const storedUserType = getUserTypeFromStorage()
       
       if (storedUser) {
-        setUser(JSON.parse(storedUser))
+        setUser(storedUser)
       }
       if (storedUserType) {
         setUserType(storedUserType)
@@ -283,7 +327,7 @@ useEffect(() => {
     try {
       const params = buildApiParams(false)
       console.log('Fetching outcome counts with params:', params.toString())
-      const response = await fetch(`/api/outcome-counts?${params}`)
+      const response = await fetch(`/api/calls/outcome-counts?${params}`)
       
       console.log('Outcome counts response status:', response.status)
       console.log('Outcome counts response ok:', response.ok)
@@ -385,6 +429,18 @@ useEffect(() => {
         return 'bg-yellow-500'
       case 'unknown':
         return 'bg-gray-500'
+      case 'honeypot':
+        return 'bg-purple-500'
+      case 'user_silent':
+        return 'bg-slate-500'
+      case 'inaudible':
+        return 'bg-orange-500'
+      case 'neutral':
+        return 'bg-gray-400'
+      case 'na':
+        return 'bg-gray-600'
+      case 'user-hungup':
+        return 'bg-red-600'
       default:
         return 'bg-gray-400'
     }

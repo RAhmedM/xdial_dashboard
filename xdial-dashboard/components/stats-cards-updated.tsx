@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Phone, PhoneForwarded, PhoneOff } from "lucide-react"
+import { getUserFromStorage, getUserTypeFromStorage } from "@/lib/utils"
 
 interface CallStats {
   totalCalls: number
@@ -33,11 +34,12 @@ export function StatsCardsUpdated() {
   // Get user info on component mount
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storedUser = sessionStorage.getItem('user')
-      const storedUserType = sessionStorage.getItem('userType')
+      // Use utility functions that check both localStorage and sessionStorage
+      const storedUser = getUserFromStorage()
+      const storedUserType = getUserTypeFromStorage()
       
       if (storedUser) {
-        setUser(JSON.parse(storedUser))
+        setUser(storedUser)
       }
       if (storedUserType) {
         setUserType(storedUserType)

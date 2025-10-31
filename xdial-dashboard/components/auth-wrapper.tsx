@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter, usePathname } from "next/navigation"
+import { getUserFromStorage, getUserTypeFromStorage } from "@/lib/utils"
 
 interface AuthWrapperProps {
   children: React.ReactNode
@@ -21,8 +22,9 @@ export function AuthWrapper({ children, requiredRole = 'any' }: AuthWrapperProps
       return
     }
 
-    const user = sessionStorage.getItem('user')
-    const storedUserType = sessionStorage.getItem('userType')
+    // Use utility functions that check both localStorage and sessionStorage
+    const user = getUserFromStorage()
+    const storedUserType = getUserTypeFromStorage()
 
     if (!user || !storedUserType) {
       router.push('/login')

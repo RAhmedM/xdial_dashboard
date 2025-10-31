@@ -7,6 +7,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Calendar, Clock, RotateCcw, Filter, Phone, Star, X, Ban, AlertTriangle, HelpCircle } from "lucide-react"
+import { getUserFromStorage, getUserTypeFromStorage } from "@/lib/utils"
 
 interface User {
   id?: number
@@ -68,11 +69,12 @@ export function FilterSection() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storedUser = sessionStorage.getItem('user')
-      const storedUserType = sessionStorage.getItem('userType')
+      // Use utility functions that check both localStorage and sessionStorage
+      const storedUser = getUserFromStorage()
+      const storedUserType = getUserTypeFromStorage()
       
       if (storedUser) {
-        setUser(JSON.parse(storedUser))
+        setUser(storedUser)
       }
       if (storedUserType) {
         setUserType(storedUserType)
@@ -157,11 +159,12 @@ export function CallOutcomesFilter() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const storedUser = sessionStorage.getItem('user')
-      const storedUserType = sessionStorage.getItem('userType')
+      // Use utility functions that check both localStorage and sessionStorage
+      const storedUser = getUserFromStorage()
+      const storedUserType = getUserTypeFromStorage()
       
       if (storedUser) {
-        setUser(JSON.parse(storedUser))
+        setUser(storedUser)
       }
       if (storedUserType) {
         setUserType(storedUserType)

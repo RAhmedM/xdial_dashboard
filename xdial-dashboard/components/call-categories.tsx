@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Volume2, Star, HelpCircle, Phone, X, Ban, AlertTriangle } from "lucide-react"
+import { Volume2, Star, HelpCircle, Phone, X, Ban, AlertTriangle, Shield, MicOff, VolumeX, Circle } from "lucide-react"
 
 const categories = [
   {
@@ -77,6 +77,30 @@ const callOutcomes = [
     title: "Unknown",
     icon: HelpCircle,
     iconColor: "text-gray-500",
+  },
+  {
+    id: "Honeypot",
+    title: "Honeypot",
+    icon: Shield,
+    iconColor: "text-purple-500",
+  },
+  {
+    id: "User_Silent",
+    title: "User Silent",
+    icon: MicOff,
+    iconColor: "text-slate-500",
+  },
+  {
+    id: "INAUDIBLE",
+    title: "INAUDIBLE",
+    icon: VolumeX,
+    iconColor: "text-orange-500",
+  },
+  {
+    id: "neutral",
+    title: "Neutral",
+    icon: Circle,
+    iconColor: "text-gray-400",
   },
 ]
 

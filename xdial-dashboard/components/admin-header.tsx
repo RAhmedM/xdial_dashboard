@@ -4,13 +4,14 @@ import { Button } from "@/components/ui/button"
 import { Shield, User, BarChart } from "lucide-react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { clearUserFromStorage } from "@/lib/utils"
 
 export function AdminHeader() {
   const router = useRouter()
 
   const handleLogout = () => {
-    sessionStorage.removeItem('user')
-    sessionStorage.removeItem('userType')
+    // Clear user data from both localStorage and sessionStorage
+    clearUserFromStorage()
     router.push('/login')
   }
 
