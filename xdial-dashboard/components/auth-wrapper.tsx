@@ -22,6 +22,46 @@ export function AuthWrapper({ children, requiredRole = 'any' }: AuthWrapperProps
       return
     }
 
+    // Check if there's a tempAuth parameter - give it a moment to be processed
+    let tempAuthKey: string | null = null
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      tempAuthKey = urlParams.get('tempAuth')
+    }
+    
+    if (tempAuthKey) {
+      // Wait a bit for the dashboard page to process the temp auth
+      const checkAuth = () => {
+        const user = getUserFromStorage()
+        const storedUserType = getUserTypeFromStorage()
+
+        if (user && storedUserType) {
+          setUserType(storedUserType)
+          
+          // Check role permissions
+          if (requiredRole !== 'any') {
+            if (requiredRole === 'admin' && storedUserType !== 'admin') {
+              router.push('/dashboard')
+              return
+            }
+            if (requiredRole === 'client' && storedUserType !== 'client') {
+              router.push('/admin')
+              return
+            }
+          }
+          
+          setIsAuthenticated(true)
+        } else {
+          // If temp auth is present but not processed yet, wait a bit more
+          setTimeout(checkAuth, 100)
+        }
+      }
+      
+      // Give it 500ms to process, checking every 100ms
+      setTimeout(checkAuth, 100)
+      return
+    }
+
     // Use utility functions that check both localStorage and sessionStorage
     const user = getUserFromStorage()
     const storedUserType = getUserTypeFromStorage()

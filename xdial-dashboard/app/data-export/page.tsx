@@ -26,7 +26,14 @@ import {
   AlertTriangle,
   HelpCircle,
   RotateCcw,
-  Loader2
+  Loader2,
+  Shield,
+  MicOff,
+  VolumeX,
+  Circle,
+  PhoneOff,
+  Minus,
+  X,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { getUserFromStorage, getUserTypeFromStorage } from "@/lib/utils"
@@ -54,49 +61,103 @@ interface ListIdOption {
   count: number
 }
 
+interface OutcomeCounts {
+  [key: string]: number
+}
+
+// Map filter IDs to database values (matching outcome-counts route mapping)
+// Note: Database may store values with hyphens, underscores, or different cases
+const getDbValuesForFilter = (filterId: string): string[] => {
+  const mapping: { [key: string]: string[] } = {
+    'answering-machine': ['Answering_Machine', 'answering-machine', 'answering_machine', 'Answering Machine'],
+    'interested': ['Interested', 'interested'],
+    'not-interested': ['Not_Interested', 'not-interested', 'not_interested', 'Not Interested'],
+    'do-not-call': ['DNC', 'do-not-call', 'do_not_call', 'Do Not Call'],
+    'do-not-qualify': ['DNQ', 'do-not-qualify', 'do_not_qualify', 'Do Not Qualify'],
+    'unknown': ['Unknown', 'unknown'],
+    'Honeypot': ['Honeypot', 'honeypot'],
+    'User_Silent': ['User_Silent', 'user-silent', 'user_silent', 'User Silent'],
+    'INAUDIBLE': ['INAUDIBLE', 'inaudible', 'Inaudible'],
+    'neutral': ['neutral', 'Neutral'],
+    'NA': ['NA', 'na', 'N/A'],
+    'USER-HUNGUP': ['USER-HUNGUP', 'user-hungup', 'user_hungup', 'User Hung Up'],
+  }
+  return mapping[filterId] || [filterId]
+}
+
 const dispositionOptions = [
   {
     id: "answering-machine",
     label: "Answering Machine",
     icon: Phone,
     iconColor: "text-blue-500",
-    dbValue: "Answering_Machine"
   },
   {
     id: "interested",
     label: "Interested",
     icon: Star,
     iconColor: "text-green-500",
-    dbValue: "Interested"
   },
   {
     id: "not-interested",
     label: "Not Interested",
-    icon: Star,
+    icon: X,
     iconColor: "text-red-500",
-    dbValue: "Not_Interested"
   },
   {
     id: "do-not-call",
     label: "Do Not Call",
     icon: Ban,
     iconColor: "text-pink-500",
-    dbValue: "DNC"
   },
   {
     id: "do-not-qualify",
     label: "Do Not Qualify",
     icon: AlertTriangle,
     iconColor: "text-yellow-500",
-    dbValue: "DNQ"
   },
   {
     id: "unknown",
     label: "Unknown",
     icon: HelpCircle,
     iconColor: "text-gray-500",
-    dbValue: "Unknown"
-  }
+  },
+  {
+    id: "Honeypot",
+    label: "Honeypot",
+    icon: Shield,
+    iconColor: "text-purple-500",
+  },
+  {
+    id: "User_Silent",
+    label: "User Silent",
+    icon: MicOff,
+    iconColor: "text-slate-500",
+  },
+  {
+    id: "INAUDIBLE",
+    label: "INAUDIBLE",
+    icon: VolumeX,
+    iconColor: "text-orange-500",
+  },
+  {
+    id: "neutral",
+    label: "Neutral",
+    icon: Circle,
+    iconColor: "text-gray-400",
+  },
+  {
+    id: "NA",
+    label: "NA",
+    icon: Minus,
+    iconColor: "text-gray-600",
+  },
+  {
+    id: "USER-HUNGUP",
+    label: "User Hung Up",
+    icon: PhoneOff,
+    iconColor: "text-red-600",
+  },
 ]
 
 export default function DataExportPage() {
@@ -119,6 +180,7 @@ export default function DataExportPage() {
     totalRecords: 0,
     estimatedSize: ''
   })
+  const [outcomeCounts, setOutcomeCounts] = useState<OutcomeCounts>({})
 
   const { toast } = useToast()
 
@@ -140,12 +202,18 @@ export default function DataExportPage() {
   useEffect(() => {
     if (userType) {
       fetchAvailableListIds()
+      fetchOutcomeCounts()
     }
   }, [userType, user])
 
   useEffect(() => {
     updateExportStats()
-  }, [filters])
+    if (userType) {
+      fetchAvailableListIds()
+      fetchOutcomeCounts()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters, userType, user])
 
   const fetchAvailableListIds = async () => {
     setLoadingListIds(true)
@@ -155,6 +223,32 @@ export default function DataExportPage() {
       // Add client filter for non-admin users
       if (userType === 'client' && user?.id) {
         params.append('client_id', user.id.toString())
+      }
+
+      // Add date filters
+      if (filters.startDate) {
+        const startDateTime = filters.startTime 
+          ? `${filters.startDate}T${filters.startTime}:00`
+          : `${filters.startDate}T00:00:00`
+        params.append('start_date', startDateTime)
+      }
+
+      if (filters.endDate) {
+        const endDateTime = filters.endTime 
+          ? `${filters.endDate}T${filters.endTime}:59`
+          : `${filters.endDate}T23:59:59`
+        params.append('end_date', endDateTime)
+      }
+
+      // Add disposition filters (to filter list ID counts by selected dispositions)
+      if (filters.selectedDispositions.length > 0) {
+        filters.selectedDispositions.forEach(dispId => {
+          const dbValues = getDbValuesForFilter(dispId)
+          // Send all possible variations so the API can match any format in the database
+          dbValues.forEach(dbValue => {
+            params.append('response_categories', dbValue)
+          })
+        })
       }
 
       const response = await fetch(`/api/export/list-ids?${params}`)
@@ -171,6 +265,52 @@ export default function DataExportPage() {
       })
     } finally {
       setLoadingListIds(false)
+    }
+  }
+
+  const fetchOutcomeCounts = async () => {
+    try {
+      const params = new URLSearchParams()
+      
+      // Add client filter for non-admin users
+      if (userType === 'client' && user?.id) {
+        params.append('client_id', user.id.toString())
+      }
+
+      // Add date filters (same as export filters)
+      if (filters.startDate) {
+        const startDateTime = filters.startTime 
+          ? `${filters.startDate}T${filters.startTime}:00`
+          : `${filters.startDate}T00:00:00`
+        params.append('start_date', startDateTime)
+      }
+
+      if (filters.endDate) {
+        const endDateTime = filters.endTime 
+          ? `${filters.endDate}T${filters.endTime}:59`
+          : `${filters.endDate}T23:59:59`
+        params.append('end_date', endDateTime)
+      }
+
+      // Add list_id filters (to filter disposition counts by selected list IDs)
+      if (filters.selectedListIds.length > 0) {
+        filters.selectedListIds.forEach(listId => {
+          params.append('list_ids', listId)
+        })
+      }
+
+      const response = await fetch(`/api/calls/outcome-counts?${params}`)
+      if (!response.ok) {
+        console.warn('Failed to fetch outcome counts, using empty counts')
+        setOutcomeCounts({})
+        return
+      }
+
+      const data = await response.json()
+      setOutcomeCounts(data)
+    } catch (error) {
+      console.error('Error fetching outcome counts:', error)
+      setOutcomeCounts({})
     }
   }
 
@@ -224,13 +364,14 @@ export default function DataExportPage() {
     }
 
     // Add disposition filters
+    // Convert filter IDs to database values - send all possible variations
     if (filters.selectedDispositions.length > 0) {
-      const dbValues = filters.selectedDispositions.map(dispId => {
-        const disposition = dispositionOptions.find(d => d.id === dispId)
-        return disposition?.dbValue || dispId
-      })
-      dbValues.forEach(dbValue => {
-        params.append('response_categories', dbValue)
+      filters.selectedDispositions.forEach(dispId => {
+        const dbValues = getDbValuesForFilter(dispId)
+        // Send all possible variations so the API can match any format in the database
+        dbValues.forEach(dbValue => {
+          params.append('response_categories', dbValue)
+        })
       })
     }
 
@@ -444,9 +585,6 @@ export default function DataExportPage() {
                                   className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-2 flex-1"
                                 >
                                   {item.list_id}
-                                  <Badge variant="outline" className="text-xs">
-                                    {item.count} calls
-                                  </Badge>
                                 </label>
                               </div>
                             ))}
@@ -531,7 +669,7 @@ export default function DataExportPage() {
                       </Button>
                     </div>
                     
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                       {dispositionOptions.map((disposition) => (
                         <div key={disposition.id} className="flex items-center space-x-2">
                           <Checkbox

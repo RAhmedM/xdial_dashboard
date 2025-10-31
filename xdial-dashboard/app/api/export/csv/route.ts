@@ -22,25 +22,29 @@ function escapeCsvValue(value: any): string {
 }
 
 // Helper function to format timestamp for CSV
-function formatTimestamp(timestamp: string): string {
+function formatTimestamp(timestamp: any): string {
   if (!timestamp) return ''
   
   try {
+    // Convert to string if it's not already (PostgreSQL returns Date objects)
+    const timestampStr = typeof timestamp === 'string' ? timestamp : String(timestamp)
+    
     // Parse timestamp as raw string without timezone interpretation
     // Expected format: YYYY-MM-DD HH:MM:SS or YYYY-MM-DDTHH:MM:SS
-    const match = timestamp.match(/^(\d{4})-(\d{2})-(\d{2})[T\s]+(\d{2}):(\d{2}):(\d{2})/)
+    const match = timestampStr.match(/^(\d{4})-(\d{2})-(\d{2})[T\s]+(\d{2}):(\d{2}):(\d{2})/)
     
     if (match) {
       const [, year, month, day, hours, minutes, seconds] = match
       return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
     }
     
-    // If format doesn't match expected pattern, return as-is
-    console.warn('Unexpected timestamp format:', timestamp)
-    return timestamp
+    // If format doesn't match expected pattern, return as string
+    console.warn('Unexpected timestamp format:', timestampStr)
+    return timestampStr
   } catch (error) {
     console.error('Error formatting timestamp:', error)
-    return timestamp
+    // Ensure we return a string even on error
+    return String(timestamp || '')
   }
 }
 
@@ -92,13 +96,22 @@ export async function GET(request: NextRequest) {
     }
 
     // Add response category filters
+    // Handle case variations and different formats (e.g., "answering-machine" vs "Answering_Machine")
     if (responseCategories.length > 0) {
-      const categoryPlaceholders = responseCategories.map(() => {
+      const categoryConditions: string[] = []
+      responseCategories.forEach(responseCategory => {
+        // Normalize both database value and search value for case-insensitive, format-agnostic matching
         paramCount++
-        return `$${paramCount}`
-      }).join(',')
-      conditions.push(`c.response_category IN (${categoryPlaceholders})`)
-      params.push(...responseCategories)
+        categoryConditions.push(
+          `LOWER(REPLACE(c.response_category, '-', '_')) = LOWER(REPLACE($${paramCount}, '-', '_'))`
+        )
+        params.push(responseCategory)
+      })
+      
+      if (categoryConditions.length > 0) {
+        // Combine all category matches with OR
+        conditions.push(`(${categoryConditions.join(' OR ')})`)
+      }
     }
 
     const whereClause = conditions.length > 0 ? 

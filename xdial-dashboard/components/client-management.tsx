@@ -24,7 +24,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Plus, Edit, Trash2, Eye, EyeOff } from "lucide-react"
+import { Plus, Edit, Trash2, Eye, EyeOff, ExternalLink } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface Client {
@@ -188,6 +188,67 @@ export function ClientManagement() {
     setShowPasswords(prev => ({ ...prev, [clientId]: !prev[clientId] }))
   }
 
+  const handleOpenClientDashboard = async (client: Client) => {
+    try {
+      // First, authenticate the client
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          username: client.client_id.toString(),
+          password: client.password
+        }),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok || !data.success) {
+        toast({
+          title: "Error",
+          description: data.error || "Failed to authenticate client",
+          variant: "destructive"
+        })
+        return
+      }
+
+      // Store user data temporarily with a special key for the new window
+      // We'll use a timestamp-based key to ensure uniqueness
+      const tempKey = `temp_auth_${Date.now()}`
+      const authData = {
+        user: data.user,
+        userType: data.userType
+      }
+      localStorage.setItem(tempKey, JSON.stringify(authData))
+
+      // Open new window with dashboard URL and temp key
+      const newWindow = window.open(`/dashboard?tempAuth=${tempKey}`, '_blank')
+
+      if (!newWindow) {
+        localStorage.removeItem(tempKey)
+        toast({
+          title: "Error",
+          description: "Please allow popups to open client dashboard",
+          variant: "destructive"
+        })
+        return
+      }
+
+      toast({
+        title: "Success",
+        description: `Opening ${client.client_name}'s dashboard`
+      })
+    } catch (error) {
+      console.error('Error opening client dashboard:', error)
+      toast({
+        title: "Error",
+        description: "Failed to open client dashboard",
+        variant: "destructive"
+      })
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -339,6 +400,15 @@ export function ClientManagement() {
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleOpenClientDashboard(client)}
+                          title="Open client dashboard"
+                          className="text-blue-600 hover:text-blue-700"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </Button>
                         <Button
                           variant="ghost"
                           size="sm"

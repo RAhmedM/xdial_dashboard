@@ -35,7 +35,7 @@ import {
   Minus,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { getUserFromStorage, getUserTypeFromStorage } from "@/lib/utils"
+import { getUserFromStorage, getUserTypeFromStorage, setUserInStorage } from "@/lib/utils"
 
 interface FilterState {
   search: string
@@ -217,6 +217,48 @@ export default function DashboardPage() {
       }
     }
   }, [])
+
+  // Handle auto-login from admin page via URL parameter
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const urlParams = new URLSearchParams(window.location.search)
+      const tempAuthKey = urlParams.get('tempAuth')
+      
+      if (tempAuthKey) {
+        // Get auth data from localStorage
+        const authDataStr = localStorage.getItem(tempAuthKey)
+        
+        if (authDataStr) {
+          try {
+            const authData = JSON.parse(authDataStr)
+            const { user: authUser, userType: authUserType } = authData
+            
+            // Store user data in storage
+            setUserInStorage(authUser, authUserType)
+            
+            // Update state
+            setUser(authUser)
+            setUserType(authUserType)
+
+            // Clean up temp key
+            localStorage.removeItem(tempAuthKey)
+            
+            // Remove tempAuth from URL without reloading
+            const newUrl = window.location.pathname
+            window.history.replaceState({}, '', newUrl)
+
+            toast({
+              title: "Login Successful",
+              description: `Logged in as ${authUser.name || authUser.username}`
+            })
+          } catch (error) {
+            console.error('Error parsing auth data:', error)
+            localStorage.removeItem(tempAuthKey)
+          }
+        }
+      }
+    }
+  }, [toast])
 
 useEffect(() => {
   // Only fetch if user data is loaded

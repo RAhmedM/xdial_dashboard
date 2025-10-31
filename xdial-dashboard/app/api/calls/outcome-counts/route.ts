@@ -14,8 +14,9 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('end_date')
     const search = searchParams.get('search')
     const listIdSearch = searchParams.get('list_id_search')
+    const listIds = searchParams.getAll('list_ids')
 
-    console.log('Outcome counts filters:', { clientId, startDate, endDate, search, listIdSearch })
+    console.log('Outcome counts filters:', { clientId, startDate, endDate, search, listIdSearch, listIds })
 
     // Build WHERE conditions (same as calls API but without outcome filtering)
     const conditions: string[] = []
@@ -47,6 +48,15 @@ export async function GET(request: NextRequest) {
     if (listIdSearch) {
       conditions.push(`c.list_id ILIKE $${params.length + 1}`)
       params.push(`%${listIdSearch}%`)
+    }
+
+    // Add list_id filters (when specific list IDs are selected)
+    if (listIds.length > 0) {
+      const listIdPlaceholders = listIds.map(() => {
+        return `$${params.length + 1}`
+      }).join(',')
+      conditions.push(`c.list_id IN (${listIdPlaceholders})`)
+      params.push(...listIds)
     }
 
     const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : ''

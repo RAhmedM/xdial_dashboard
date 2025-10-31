@@ -9,6 +9,9 @@ export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const clientId = searchParams.get('client_id')
+    const startDate = searchParams.get('start_date')
+    const endDate = searchParams.get('end_date')
+    const responseCategories = searchParams.getAll('response_categories')
 
     // Build WHERE conditions
     const conditions = []
@@ -20,6 +23,29 @@ export async function GET(request: NextRequest) {
       paramCount++
       conditions.push(`client_id = $${paramCount}`)
       params.push(parseInt(clientId))
+    }
+
+    // Add date filters
+    if (startDate) {
+      paramCount++
+      conditions.push(`timestamp >= $${paramCount}`)
+      params.push(startDate)
+    }
+
+    if (endDate) {
+      paramCount++
+      conditions.push(`timestamp <= $${paramCount}`)
+      params.push(endDate)
+    }
+
+    // Add response category filters (disposition filters)
+    if (responseCategories.length > 0) {
+      const categoryPlaceholders = responseCategories.map(() => {
+        paramCount++
+        return `$${paramCount}`
+      }).join(',')
+      conditions.push(`response_category IN (${categoryPlaceholders})`)
+      params.push(...responseCategories)
     }
 
     // Only include records with non-null list_id

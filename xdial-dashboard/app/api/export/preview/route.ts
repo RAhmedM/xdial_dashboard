@@ -54,25 +54,37 @@ export async function GET(request: NextRequest) {
     }
 
     // Add response category filters - convert frontend filter values to database values
+    // Handle case variations and different formats (e.g., "answering-machine" vs "Answering_Machine")
     if (responseCategories.length > 0) {
-      // Convert filter categories to database values
-      const dbCategories: string[] = []
+      // Build OR conditions for each category value
+      // Use normalized matching (case-insensitive, hyphen/underscore agnostic)
+      const categoryConditions: string[] = []
       responseCategories.forEach(filterCategory => {
         const dbValues = FILTER_TO_DB_MAPPING[filterCategory as keyof typeof FILTER_TO_DB_MAPPING]
         if (dbValues) {
-          dbCategories.push(...dbValues)
+          // It's a filter ID, convert to DB values
+          dbValues.forEach(dbValue => {
+            // Normalize both database value and search value for comparison
+            paramCount++
+            categoryConditions.push(
+              `LOWER(REPLACE(c.response_category, '-', '_')) = LOWER(REPLACE($${paramCount}, '-', '_'))`
+            )
+            params.push(dbValue)
+          })
         } else {
-          console.warn(`Unknown filter category: ${filterCategory}`)
+          // It's likely already a DB value (for new categories not in mapping)
+          // Normalize for comparison
+          paramCount++
+          categoryConditions.push(
+            `LOWER(REPLACE(c.response_category, '-', '_')) = LOWER(REPLACE($${paramCount}, '-', '_'))`
+          )
+          params.push(filterCategory)
         }
       })
       
-      if (dbCategories.length > 0) {
-        const categoryPlaceholders = dbCategories.map(() => {
-          paramCount++
-          return `$${paramCount}`
-        }).join(',')
-        conditions.push(`c.response_category IN (${categoryPlaceholders})`)
-        params.push(...dbCategories)
+      if (categoryConditions.length > 0) {
+        // Combine all category matches with OR
+        conditions.push(`(${categoryConditions.join(' OR ')})`)
       }
     }
 

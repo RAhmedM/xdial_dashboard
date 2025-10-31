@@ -15,6 +15,8 @@ export async function GET(request: NextRequest) {
     const endDate = searchParams.get('end_date') || ''
     const clientId = searchParams.get('client_id') || ''
     const responseCategories = searchParams.getAll('response_categories')
+    const sortField = searchParams.get('sort_field') || 'timestamp'
+    const sortDirection = searchParams.get('sort_direction') || 'desc'
 
     const offset = (page - 1) * limit
 
@@ -75,6 +77,22 @@ export async function GET(request: NextRequest) {
     const whereClause = conditions.length > 0 ? 
         `WHERE ${conditions.join(' AND ')}` : ''
 
+    // Validate and map sort field to database column
+    const validSortFields: { [key: string]: string } = {
+      'call_id': 'c.call_id',
+      'phone_number': 'c.phone_number',
+      'list_id': 'c.list_id',
+      'response_category': 'c.response_category',
+      'timestamp': 'c.timestamp',
+      'client_name': 'cl.client_name'
+    }
+
+    const validSortDirections = ['asc', 'desc']
+    const sortColumn = validSortFields[sortField] || validSortFields['timestamp']
+    const sortDir = validSortDirections.includes(sortDirection.toLowerCase()) 
+      ? sortDirection.toUpperCase() 
+      : 'DESC'
+
     // First, get total count
     const countQuery = `
       SELECT COUNT(*) as total
@@ -105,7 +123,7 @@ export async function GET(request: NextRequest) {
       FROM calls c 
       LEFT JOIN clients cl ON c.client_id = cl.client_id 
       ${whereClause}
-      ORDER BY c.timestamp DESC
+      ORDER BY ${sortColumn} ${sortDir}
       LIMIT $${params.length + 1} OFFSET $${params.length + 2}
     `
 
