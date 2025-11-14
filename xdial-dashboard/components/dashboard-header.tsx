@@ -50,7 +50,6 @@ export function DashboardHeader() {
           <Phone className="h-6 w-6 text-blue-500" />
           <div className="flex items-center gap-3">
             <div>
-              <h1 className="text-xl font-semibold text-gray-900">XDialNetworks</h1>
               {user?.name && (
                 <p className="text-lg font-medium text-blue-600 mt-1">
                   Welcome back, {user.name}!

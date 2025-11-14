@@ -1,11 +1,11 @@
 // app/dashboard/page.tsx
 "use client"
-
 import { useState, useEffect } from "react"
 import { DashboardHeader } from "@/components/dashboard-header"
 import { AuthWrapper } from "@/components/auth-wrapper"
 import { Toaster } from "@/components/ui/toaster"
 import { TranscriptPopup } from "@/components/transcript-popup"
+import { CategoryChangeCards } from "@/components/category-change-cards"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -33,6 +33,7 @@ import {
   Circle,
   PhoneOff,
   Minus,
+  Clock,
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { getUserFromStorage, getUserTypeFromStorage, setUserInStorage } from "@/lib/utils"
@@ -72,81 +73,178 @@ interface OutcomeCounts {
   [key: string]: number
 }
 
+interface CategoryChanges {
+  [key: string]: string // Now contains formatted percentages like "+5.23%" or "-2.10%"
+}
+
 type SortField = 'call_id' | 'phone_number' | 'list_id' | 'response_category' | 'timestamp' | 'client_name'
 type SortDirection = 'asc' | 'desc'
 
+// DISPLAY CATEGORY MAPPING
+const CATEGORY_DISPLAY_MAPPING: Record<string, string> = {
+  // Qualified
+  'interested': 'qualified',
+  'INTERESTED': 'qualified',
+  'good': 'qualified',
+  // Neutral
+  'neutral': 'neutral',
+  'already_keywords': 'neutral',
+  'repeat_pitch_keywords': 'neutral',
+  // Unknown
+  'Unknown': 'unknown',
+  'Not_Responding_hello': 'unknown',
+  // Inaudible
+  'INAUDIBLE': 'inaudible',
+  'INAUDIBLE_greeting': 'inaudible',
+  // Not Interested
+  'not-interested': 'not-interested',
+  'busy_keywords': 'not-interested',
+  'rebuttal_keywords': 'not-interested',
+  // DNC
+  'do-not-call': 'do-not-call',
+  'DO_NOT_CALL_greeting': 'do-not-call',
+  'DO_NOT_CALL_hello': 'do-not-call',
+  // DNQ
+  'do-not-qualify': 'do-not-qualify',
+  // Honeypot
+  'Honey_pot': 'honeypot',
+  'Honeypot': 'honeypot',
+  'Honey_pot_greeting': 'honeypot',
+  'Honey_pot_hello': 'honeypot',
+  'Honeypot_K': 'honeypot',
+  'Honeypot_K_greeting': 'honeypot',
+  'Honeypot_K_hello': 'honeypot',
+  'Honeypot_S': 'honeypot',
+  // User Silent
+  'User_Silent': 'user-silent',
+  'User_Silent_hello': 'user-silent',
+  // NA
+  'NA': 'na',
+  // User Hung Up
+  'USER-HUNGUP': 'user-hungup',
+  // Answering Machine
+  'answering-machine': 'answering-machine',
+  'ANSWER_MACHINE_hello': 'answering-machine',
+  // Ringing
+  'Ringing': 'ringing',
+}
+
+// Reverse mapping: display category -> list of backend categories
+const DISPLAY_TO_BACKEND_MAPPING: Record<string, string[]> = {
+  'qualified': ['interested', 'INTERESTED', 'good'],
+  'neutral': ['neutral', 'already_keywords', 'repeat_pitch_keywords'],
+  'unknown': ['Unknown', 'Not_Responding_hello'],
+  'inaudible': ['INAUDIBLE', 'INAUDIBLE_greeting'],
+  'not-interested': ['not-interested', 'busy_keywords', 'rebuttal_keywords'],
+  'do-not-call': ['do-not-call', 'DO_NOT_CALL_greeting', 'DO_NOT_CALL_hello'],
+  'do-not-qualify': ['do-not-qualify'],
+  'honeypot': ['Honey_pot', 'Honeypot', 'Honey_pot_greeting', 'Honey_pot_hello', 'Honeypot_K', 'Honeypot_K_greeting', 'Honeypot_K_hello', 'Honeypot_S'],
+  'user-silent': ['User_Silent', 'User_Silent_hello'],
+  'na': ['NA'],
+  'user-hungup': ['USER-HUNGUP'],
+  'answering-machine': ['answering-machine', 'ANSWER_MACHINE_hello'],
+  'ringing': ['Ringing'],
+}
+
 const callOutcomes = [
+  // First row - main outcomes (4 items)
   {
-    id: "answering-machine",
-    title: "Answering Machine",
-    icon: Phone,
-    iconColor: "text-blue-500",
-  },
-  {
-    id: "interested",
-    title: "Interested",
+    id: "qualified",
+    title: "Qualified",
     icon: Star,
     iconColor: "text-green-500",
-  },
-  {
-    id: "not-interested",
-    title: "Not Interested",
-    icon: X,
-    iconColor: "text-red-500",
-  },
-  {
-    id: "do-not-call",
-    title: "Do Not Call",
-    icon: Ban,
-    iconColor: "text-pink-500",
-  },
-  {
-    id: "do-not-qualify",
-    title: "Do Not Qualify",
-    icon: AlertTriangle,
-    iconColor: "text-yellow-500",
-  },
-  {
-    id: "unknown",
-    title: "Unknown",
-    icon: HelpCircle,
-    iconColor: "text-gray-500",
-  },
-  {
-    id: "Honeypot",
-    title: "Honeypot",
-    icon: Shield,
-    iconColor: "text-purple-500",
-  },
-  {
-    id: "User_Silent",
-    title: "User Silent",
-    icon: MicOff,
-    iconColor: "text-slate-500",
-  },
-  {
-    id: "INAUDIBLE",
-    title: "INAUDIBLE",
-    icon: VolumeX,
-    iconColor: "text-orange-500",
+    bgColor: "bg-green-500",
+    row: 1,
   },
   {
     id: "neutral",
     title: "Neutral",
     icon: Circle,
     iconColor: "text-gray-400",
+    bgColor: "bg-gray-400",
+    row: 1,
   },
   {
-    id: "NA",
+    id: "unknown",
+    title: "Unknown",
+    icon: HelpCircle,
+    iconColor: "text-gray-500",
+    bgColor: "bg-gray-500",
+    row: 1,
+  },
+  {
+    id: "inaudible",
+    title: "Inaudible",
+    icon: VolumeX,
+    iconColor: "text-orange-500",
+    bgColor: "bg-orange-500",
+    row: 1,
+  },
+  // Second row - secondary outcomes (4 items)
+  {
+    id: "answering-machine",
+    title: "Answering Machine",
+    icon: Phone,
+    iconColor: "text-blue-500",
+    bgColor: "bg-blue-500",
+    row: 2,
+  },
+  {
+    id: "not-interested",
+    title: "Not Interested",
+    icon: X,
+    iconColor: "text-red-500",
+    bgColor: "bg-red-500",
+    row: 2,
+  },
+  {
+    id: "do-not-call",
+    title: "DNC",
+    icon: Ban,
+    iconColor: "text-pink-500",
+    bgColor: "bg-pink-500",
+    row: 2,
+  },
+  {
+    id: "do-not-qualify",
+    title: "DNQ",
+    icon: AlertTriangle,
+    iconColor: "text-yellow-500",
+    bgColor: "bg-yellow-500",
+    row: 2,
+  },
+  // Third row - additional outcomes (4 items)
+  {
+    id: "honeypot",
+    title: "Honeypot",
+    icon: Shield,
+    iconColor: "text-purple-500",
+    bgColor: "bg-purple-500",
+    row: 3,
+  },
+  {
+    id: "user-silent",
+    title: "User Silent",
+    icon: MicOff,
+    iconColor: "text-slate-500",
+    bgColor: "bg-slate-500",
+    row: 3,
+  },
+  {
+    id: "na",
     title: "NA",
     icon: Minus,
     iconColor: "text-gray-600",
+    bgColor: "bg-gray-600",
+    row: 3,
   },
   {
-    id: "USER-HUNGUP",
+    id: "user-hungup",
     title: "User Hung Up",
     icon: PhoneOff,
     iconColor: "text-red-600",
+    bgColor: "bg-red-600",
+    row: 3,
   },
 ]
 
@@ -156,14 +254,49 @@ const getTodaysDate = () => {
   return today.toISOString().split('T')[0]
 }
 
+// Map backend category to display category
+const mapToDisplayCategory = (backendCategory: string): string => {
+  return CATEGORY_DISPLAY_MAPPING[backendCategory] || 'unknown'
+}
+
+// Aggregate backend outcome counts into display categories
+const aggregateOutcomeCounts = (rawCounts: OutcomeCounts): OutcomeCounts => {
+  const aggregated: OutcomeCounts = {}
+  Object.entries(rawCounts).forEach(([backendCategory, count]) => {
+    const displayCategory = mapToDisplayCategory(backendCategory)
+    aggregated[displayCategory] = (aggregated[displayCategory] || 0) + count
+  })
+  return aggregated
+}
+
+// Aggregate category changes (which now contain formatted percentage strings)
+const aggregateCategoryChanges = (rawChanges: CategoryChanges): CategoryChanges => {
+  const aggregated: { [key: string]: number } = {}
+  
+  // Convert percentage strings back to numbers for aggregation
+  Object.entries(rawChanges).forEach(([backendCategory, changeStr]) => {
+    const displayCategory = mapToDisplayCategory(backendCategory)
+    const changeNum = parseFloat(changeStr.replace('%', '').replace('+', ''))
+    aggregated[displayCategory] = (aggregated[displayCategory] || 0) + changeNum
+  })
+  
+  // Convert back to formatted strings
+  const result: CategoryChanges = {}
+  Object.entries(aggregated).forEach(([category, value]) => {
+    result[category] = value > 0 ? `+${value.toFixed(2)}%` : `${value.toFixed(2)}%`
+  })
+  
+  return result
+}
+
 export default function DashboardPage() {
   const [filters, setFilters] = useState<FilterState>({
     search: "",
     listIdSearch: "",
-    startDate: getTodaysDate(), // Default to today's date
+    startDate: getTodaysDate(),
     endDate: "",
-    startTime: "", // Empty by default
-    endTime: "", // Empty by default
+    startTime: "",
+    endTime: "",
     selectedOutcomes: [],
   })
 
@@ -177,10 +310,19 @@ export default function DashboardPage() {
     total: 0,
     totalPages: 0,
   })
+
   const [outcomeCounts, setOutcomeCounts] = useState<OutcomeCounts>({})
   const [sortField, setSortField] = useState<SortField>('timestamp')
   const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
   const [selectAllOutcomes, setSelectAllOutcomes] = useState(false)
+  const [categoryChanges, setCategoryChanges] = useState<{
+    fiveMin: CategoryChanges
+    tenMin: CategoryChanges
+  }>({
+    fiveMin: {},
+    tenMin: {}
+  })
+
   const [transcriptPopup, setTranscriptPopup] = useState<{
     isOpen: boolean
     transcript: string | null
@@ -205,10 +347,8 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      // Use utility functions that check both localStorage and sessionStorage
       const storedUser = getUserFromStorage()
       const storedUserType = getUserTypeFromStorage()
-      
       if (storedUser) {
         setUser(storedUser)
       }
@@ -218,35 +358,22 @@ export default function DashboardPage() {
     }
   }, [])
 
-  // Handle auto-login from admin page via URL parameter
   useEffect(() => {
     if (typeof window !== 'undefined') {
       const urlParams = new URLSearchParams(window.location.search)
       const tempAuthKey = urlParams.get('tempAuth')
-      
       if (tempAuthKey) {
-        // Get auth data from localStorage
         const authDataStr = localStorage.getItem(tempAuthKey)
-        
         if (authDataStr) {
           try {
             const authData = JSON.parse(authDataStr)
             const { user: authUser, userType: authUserType } = authData
-            
-            // Store user data in storage
             setUserInStorage(authUser, authUserType)
-            
-            // Update state
             setUser(authUser)
             setUserType(authUserType)
-
-            // Clean up temp key
             localStorage.removeItem(tempAuthKey)
-            
-            // Remove tempAuth from URL without reloading
             const newUrl = window.location.pathname
             window.history.replaceState({}, '', newUrl)
-
             toast({
               title: "Login Successful",
               description: `Logged in as ${authUser.name || authUser.username}`
@@ -260,28 +387,22 @@ export default function DashboardPage() {
     }
   }, [toast])
 
-useEffect(() => {
-  // Only fetch if user data is loaded
-  if (user && userType) {
-    fetchCalls()
-    fetchOutcomeCounts()
-  }
-}, [filters, pagination.page, pagination.limit, sortField, sortDirection, user, userType])
-  // Format timestamp - display exactly as stored in database (no timezone conversion)
+  useEffect(() => {
+    if (user && userType) {
+      fetchCalls()
+      fetchOutcomeCounts()
+      fetchCategoryChanges()
+    }
+  }, [filters, pagination.page, pagination.limit, sortField, sortDirection, user, userType])
+
   const formatTimestamp = (timestamp: string) => {
     if (!timestamp) return 'N/A'
-    
     try {
-      // Parse timestamp as raw string without timezone interpretation
-      // Expected format: YYYY-MM-DD HH:MM:SS or YYYY-MM-DDTHH:MM:SS
       const match = timestamp.match(/^(\d{4})-(\d{2})-(\d{2})[T\s]+(\d{2}):(\d{2}):(\d{2})/)
-      
       if (match) {
         const [, year, month, day, hours, minutes, seconds] = match
         return `${month}/${day}/${year}, ${hours}:${minutes}:${seconds}`
       }
-      
-      // If format doesn't match expected pattern, return as-is
       console.warn('Unexpected timestamp format:', timestamp)
       return timestamp
     } catch (error) {
@@ -290,51 +411,39 @@ useEffect(() => {
     }
   }
 
-  // Helper function to build API params
   const buildApiParams = (includeOutcomes = true) => {
     const params = new URLSearchParams()
-
     if (filters.search) {
       params.append('search', filters.search)
     }
-
     if (filters.listIdSearch) {
       params.append('list_id_search', filters.listIdSearch)
     }
-
-    // Add date range filters - treat as US timezone
     if (filters.startDate) {
       const startDateTime = filters.startTime 
         ? `${filters.startDate}T${filters.startTime}:00`
         : `${filters.startDate}T00:00:00`
-      // Treat as US timezone - no conversion needed since database stores US time
       params.append('start_date', startDateTime)
     }
-
     if (filters.endDate) {
       const endDateTime = filters.endTime 
         ? `${filters.endDate}T${filters.endTime}:59`
         : `${filters.endDate}T23:59:59`
-      // Treat as US timezone - no conversion needed since database stores US time
       params.append('end_date', endDateTime)
     }
-
-    // Add outcome filters (only for calls, not for outcome counts)
     if (includeOutcomes && filters.selectedOutcomes.length > 0) {
-      filters.selectedOutcomes.forEach(outcome => {
-        params.append('response_categories', outcome)
+      filters.selectedOutcomes.forEach(displayCategory => {
+        const backendCategories = DISPLAY_TO_BACKEND_MAPPING[displayCategory] || []
+        backendCategories.forEach(backendCategory => {
+          params.append('response_categories', backendCategory)
+        })
       })
     }
-
-    // Add client_id filter for non-admin users
     if (userType === 'client' && user?.id) {
       params.append('client_id', user.id.toString())
     }
-
-    // Add sorting
     params.append('sort_field', sortField)
     params.append('sort_direction', sortDirection)
-
     return params
   }
 
@@ -344,12 +453,9 @@ useEffect(() => {
       const params = buildApiParams(true)
       params.append('page', pagination.page.toString())
       params.append('limit', pagination.limit.toString())
-
       console.log('Fetching calls with params:', params.toString())
-
       const response = await fetch(`/api/calls?${params}`)
       if (!response.ok) throw new Error('Failed to fetch calls')
-
       const data = await response.json()
       setCalls(data.calls)
       setPagination(data.pagination)
@@ -370,10 +476,8 @@ useEffect(() => {
       const params = buildApiParams(false)
       console.log('Fetching outcome counts with params:', params.toString())
       const response = await fetch(`/api/calls/outcome-counts?${params}`)
-      
       console.log('Outcome counts response status:', response.status)
       console.log('Outcome counts response ok:', response.ok)
-      
       if (!response.ok) {
         const errorText = await response.text()
         console.error('Outcome counts API error:', {
@@ -382,17 +486,34 @@ useEffect(() => {
           errorText: errorText
         })
         console.error('Full error response:', errorText)
-        // Set empty outcome counts instead of throwing error
         console.warn('Setting empty outcome counts due to API error')
         setOutcomeCounts({})
         return
       }
-
-      const data = await response.json()
-      console.log('Outcome counts data received:', data)
-      setOutcomeCounts(data)
+      const rawData = await response.json()
+      console.log('Raw outcome counts data received:', rawData)
+      const aggregatedCounts = aggregateOutcomeCounts(rawData)
+      console.log('Aggregated outcome counts:', aggregatedCounts)
+      setOutcomeCounts(aggregatedCounts)
     } catch (error) {
       console.error('Error fetching outcome counts:', error)
+    }
+  }
+
+  const fetchCategoryChanges = async () => {
+    try {
+      const params = buildApiParams(false)
+      const fiveMinResponse = await fetch(`/api/calls/category-changes?${params}&interval=5`)
+      const fiveMinData = await fiveMinResponse.ok ? await fiveMinResponse.json() : {}
+      const tenMinResponse = await fetch(`/api/calls/category-changes?${params}&interval=10`)
+      const tenMinData = await tenMinResponse.ok ? await tenMinResponse.json() : {}
+      
+      setCategoryChanges({
+        fiveMin: aggregateCategoryChanges(fiveMinData),
+        tenMin: aggregateCategoryChanges(tenMinData)
+      })
+    } catch (error) {
+      console.error('Error fetching category changes:', error)
     }
   }
 
@@ -433,7 +554,7 @@ useEffect(() => {
       transcript: call.final_transcription,
       callId: call.call_id,
       phoneNumber: call.phone_number,
-      responseCategory: call.response_category,
+      responseCategory: mapToDisplayCategory(call.response_category),
       timestamp: call.timestamp,
       clientName: call.client_name,
       listId: call.list_id
@@ -453,39 +574,16 @@ useEffect(() => {
     })
   }
 
-  const getCategoryColor = (category: string) => {
-    switch (category?.toLowerCase()) {
-      case 'interested':
-        return 'bg-green-500'
-      case 'not-interested':
-      case 'not interested':
-        return 'bg-red-500'
-      case 'answering-machine':
-      case 'answering machine':
-        return 'bg-blue-500'
-      case 'do-not-call':
-      case 'do not call':
-        return 'bg-pink-500'
-      case 'do-not-qualify':
-      case 'do not qualify':
-        return 'bg-yellow-500'
-      case 'unknown':
-        return 'bg-gray-500'
-      case 'honeypot':
-        return 'bg-purple-500'
-      case 'user_silent':
-        return 'bg-slate-500'
-      case 'inaudible':
-        return 'bg-orange-500'
-      case 'neutral':
-        return 'bg-gray-400'
-      case 'na':
-        return 'bg-gray-600'
-      case 'user-hungup':
-        return 'bg-red-600'
-      default:
-        return 'bg-gray-400'
-    }
+  const getCategoryColor = (backendCategory: string) => {
+    const displayCategory = mapToDisplayCategory(backendCategory)
+    const outcome = callOutcomes.find(o => o.id === displayCategory)
+    return outcome?.bgColor || 'bg-gray-400'
+  }
+
+  const getDisplayTitle = (backendCategory: string) => {
+    const displayCategory = mapToDisplayCategory(backendCategory)
+    const outcome = callOutcomes.find(o => o.id === displayCategory)
+    return outcome?.title || 'Unknown'
   }
 
   const handlePageChange = (newPage: number) => {
@@ -550,7 +648,6 @@ useEffect(() => {
     <AuthWrapper>
       <div className="min-h-screen bg-gray-50">
         <DashboardHeader />
-        
         <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
           {/* Filter Section */}
           <Card className="mb-6">
@@ -657,9 +754,10 @@ useEffect(() => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-                  {callOutcomes.map((outcome) => (
-                    <div key={outcome.id} className="flex items-center space-x-2">
+                {/* First Row - Main Outcomes (4 items) */}
+                <div className="flex flex-wrap gap-x-6 gap-y-2 mb-3">
+                  {callOutcomes.filter(outcome => outcome.row === 1).map((outcome) => (
+                    <div key={outcome.id} className="flex items-center space-x-2 flex-shrink-0">
                       <Checkbox
                         id={outcome.id}
                         checked={filters.selectedOutcomes.includes(outcome.id)}
@@ -669,10 +767,64 @@ useEffect(() => {
                       />
                       <label
                         htmlFor={outcome.id}
-                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1"
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1 whitespace-nowrap"
                       >
                         <outcome.icon className={`h-3 w-3 ${outcome.iconColor}`} />
-                        {outcome.title}
+                        <span>{outcome.title}</span>
+                        {outcomeCounts[outcome.id] !== undefined && (
+                          <span className="text-xs text-gray-500">
+                            ({outcomeCounts[outcome.id] || 0})
+                          </span>
+                        )}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Second Row - Secondary Outcomes (4 items) */}
+                <div className="flex flex-wrap gap-x-6 gap-y-2 mb-3">
+                  {callOutcomes.filter(outcome => outcome.row === 2).map((outcome) => (
+                    <div key={outcome.id} className="flex items-center space-x-2 flex-shrink-0">
+                      <Checkbox
+                        id={outcome.id}
+                        checked={filters.selectedOutcomes.includes(outcome.id)}
+                        onCheckedChange={(checked) => 
+                          handleOutcomeToggle(outcome.id, checked as boolean)
+                        }
+                      />
+                      <label
+                        htmlFor={outcome.id}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1 whitespace-nowrap"
+                      >
+                        <outcome.icon className={`h-3 w-3 ${outcome.iconColor}`} />
+                        <span>{outcome.title}</span>
+                        {outcomeCounts[outcome.id] !== undefined && (
+                          <span className="text-xs text-gray-500">
+                            ({outcomeCounts[outcome.id] || 0})
+                          </span>
+                        )}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Third Row - Additional Outcomes (4 items) */}
+                <div className="flex flex-wrap gap-x-6 gap-y-2">
+                  {callOutcomes.filter(outcome => outcome.row === 3).map((outcome) => (
+                    <div key={outcome.id} className="flex items-center space-x-2 flex-shrink-0">
+                      <Checkbox
+                        id={outcome.id}
+                        checked={filters.selectedOutcomes.includes(outcome.id)}
+                        onCheckedChange={(checked) => 
+                          handleOutcomeToggle(outcome.id, checked as boolean)
+                        }
+                      />
+                      <label
+                        htmlFor={outcome.id}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1 whitespace-nowrap"
+                      >
+                        <outcome.icon className={`h-3 w-3 ${outcome.iconColor}`} />
+                        <span>{outcome.title}</span>
                         {outcomeCounts[outcome.id] !== undefined && (
                           <span className="text-xs text-gray-500">
                             ({outcomeCounts[outcome.id] || 0})
@@ -685,6 +837,12 @@ useEffect(() => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Category Change Cards */}
+          <CategoryChangeCards 
+            fiveMinChanges={categoryChanges.fiveMin}
+            tenMinChanges={categoryChanges.tenMin}
+          />
 
           {/* Results Section */}
           <Card>
@@ -778,7 +936,7 @@ useEffect(() => {
                             <td className="py-3 px-4 text-sm text-gray-600">{call.list_id || 'N/A'}</td>
                             <td className="py-3 px-4">
                               <Badge className={`${getCategoryColor(call.response_category)} text-white`}>
-                                {call.response_category}
+                                {getDisplayTitle(call.response_category)}
                               </Badge>
                             </td>
                             <td className="py-3 px-4 text-sm text-gray-600">{formatTimestamp(call.timestamp)}</td>
@@ -797,7 +955,6 @@ useEffect(() => {
                         ))}
                       </tbody>
                     </table>
-
                     {calls.length === 0 && (
                       <div className="text-center py-8 text-gray-500">
                         {userType === 'client' 
@@ -825,12 +982,10 @@ useEffect(() => {
                           <ChevronLeft className="h-4 w-4" />
                           Previous
                         </Button>
-                        
                         <div className="flex items-center gap-1">
                           {Array.from({ length: Math.min(5, pagination.totalPages) }, (_, i) => {
                             const pageNum = Math.max(1, pagination.page - 2) + i
                             if (pageNum > pagination.totalPages) return null
-                            
                             return (
                               <Button
                                 key={pageNum}
@@ -843,7 +998,6 @@ useEffect(() => {
                             )
                           })}
                         </div>
-
                         <Button
                           variant="outline"
                           size="sm"
@@ -861,7 +1015,6 @@ useEffect(() => {
             </CardContent>
           </Card>
         </main>
-        
         <Toaster />
         <TranscriptPopup
           isOpen={transcriptPopup.isOpen}
