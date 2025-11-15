@@ -24,8 +24,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Plus, Edit, Trash2, Eye, EyeOff, ExternalLink } from "lucide-react"
+import { Plus, Edit, Trash2, Eye, EyeOff, ExternalLink, X } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+
+interface RecordingUrl {
+  id?: number
+  recording_url: string
+}
 
 interface Client {
   client_id: number
@@ -34,6 +39,7 @@ interface Client {
   extension: string
   call_data_url: string
   fetch_recording_url: string
+  recording_urls?: RecordingUrl[]
 }
 
 interface ClientFormData {
@@ -41,7 +47,7 @@ interface ClientFormData {
   password: string
   extension: string
   call_data_url: string
-  fetch_recording_url: string
+  recording_urls: string[]
 }
 
 export function ClientManagement() {
@@ -56,7 +62,7 @@ export function ClientManagement() {
     password: "",
     extension: "",
     call_data_url: "",
-    fetch_recording_url: ""
+    recording_urls: [""]
   })
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
@@ -93,6 +99,12 @@ export function ClientManagement() {
     if (!formData.password.trim()) errors.password = "Password is required"
     if (!formData.extension.trim()) errors.extension = "Extension is required"
     
+    // Validate recording URLs - at least one non-empty URL required
+    const validUrls = formData.recording_urls.filter(url => url.trim() !== "")
+    if (validUrls.length === 0) {
+      errors.recording_urls = "At least one recording URL is required"
+    }
+    
     setFormErrors(errors)
     return Object.keys(errors).length === 0
   }
@@ -105,10 +117,16 @@ export function ClientManagement() {
       const url = editingClient ? `/api/clients/${editingClient.client_id}` : '/api/clients'
       const method = editingClient ? 'PUT' : 'POST'
       
+      // Filter out empty URLs before sending
+      const cleanedUrls = formData.recording_urls.filter(url => url.trim() !== "")
+      
       const response = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...formData,
+          recording_urls: cleanedUrls
+        })
       })
 
       if (!response.ok) throw new Error(`Failed to ${editingClient ? 'update' : 'create'} client`)
@@ -161,12 +179,18 @@ export function ClientManagement() {
 
   const handleEdit = (client: Client) => {
     setEditingClient(client)
+    
+    // Get recording URLs from the client
+    const urls = client.recording_urls && client.recording_urls.length > 0 
+      ? client.recording_urls.map(u => u.recording_url)
+      : [client.fetch_recording_url || ""]
+    
     setFormData({
       client_name: client.client_name,
       password: client.password,
       extension: client.extension,
       call_data_url: client.call_data_url || "",
-      fetch_recording_url: client.fetch_recording_url || ""
+      recording_urls: urls.length > 0 ? urls : [""]
     })
     setIsDialogOpen(true)
   }
@@ -179,7 +203,7 @@ export function ClientManagement() {
       password: "",
       extension: "",
       call_data_url: "",
-      fetch_recording_url: ""
+      recording_urls: [""]
     })
     setFormErrors({})
   }
@@ -188,9 +212,29 @@ export function ClientManagement() {
     setShowPasswords(prev => ({ ...prev, [clientId]: !prev[clientId] }))
   }
 
+  const addRecordingUrl = () => {
+    setFormData(prev => ({
+      ...prev,
+      recording_urls: [...prev.recording_urls, ""]
+    }))
+  }
+
+  const removeRecordingUrl = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      recording_urls: prev.recording_urls.filter((_, i) => i !== index)
+    }))
+  }
+
+  const updateRecordingUrl = (index: number, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      recording_urls: prev.recording_urls.map((url, i) => i === index ? value : url)
+    }))
+  }
+
   const handleOpenClientDashboard = async (client: Client) => {
     try {
-      // First, authenticate the client
       const response = await fetch('/api/auth/login', {
         method: 'POST',
         headers: {
@@ -213,8 +257,6 @@ export function ClientManagement() {
         return
       }
 
-      // Store user data temporarily with a special key for the new window
-      // We'll use a timestamp-based key to ensure uniqueness
       const tempKey = `temp_auth_${Date.now()}`
       const authData = {
         user: data.user,
@@ -222,7 +264,6 @@ export function ClientManagement() {
       }
       localStorage.setItem(tempKey, JSON.stringify(authData))
 
-      // Open new window with dashboard URL and temp key
       const newWindow = window.open(`/dashboard?tempAuth=${tempKey}`, '_blank')
 
       if (!newWindow) {
@@ -261,7 +302,7 @@ export function ClientManagement() {
                 Add Client
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-md">
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>
                   {editingClient ? 'Edit Client' : 'Add New Client'}
@@ -320,13 +361,46 @@ export function ClientManagement() {
                 </div>
 
                 <div>
-                  <Label htmlFor="fetch_recording_url">Fetch Recording URL</Label>
-                  <Input
-                    id="fetch_recording_url"
-                    value={formData.fetch_recording_url}
-                    onChange={(e) => setFormData(prev => ({ ...prev, fetch_recording_url: e.target.value }))}
-                    placeholder="Enter fetch recording URL"
-                  />
+                  <div className="flex items-center justify-between mb-2">
+                    <Label>Recording URLs *</Label>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={addRecordingUrl}
+                      className="h-8"
+                    >
+                      <Plus className="h-3 w-3 mr-1" />
+                      Add URL
+                    </Button>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    {formData.recording_urls.map((url, index) => (
+                      <div key={index} className="flex gap-2">
+                        <Input
+                          value={url}
+                          onChange={(e) => updateRecordingUrl(index, e.target.value)}
+                          placeholder={`Recording URL ${index + 1}`}
+                        />
+                        {formData.recording_urls.length > 1 && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeRecordingUrl(index)}
+                            className="text-red-600 hover:text-red-700"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {formErrors.recording_urls && (
+                    <p className="text-sm text-red-500 mt-1">{formErrors.recording_urls}</p>
+                  )}
                 </div>
               </div>
 
@@ -362,7 +436,7 @@ export function ClientManagement() {
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Password</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Extension</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Call Data URL</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Recording URL</th>
+                  <th className="text-left py-3 px-4 font-medium text-gray-700">Recording URLs</th>
                   <th className="text-left py-3 px-4 font-medium text-gray-700">Actions</th>
                 </tr>
               </thead>
@@ -395,8 +469,21 @@ export function ClientManagement() {
                     <td className="py-3 px-4 text-sm text-gray-600 max-w-48 truncate">
                       {client.call_data_url || '-'}
                     </td>
-                    <td className="py-3 px-4 text-sm text-gray-600 max-w-48 truncate">
-                      {client.fetch_recording_url || '-'}
+                    <td className="py-3 px-4 text-sm text-gray-600">
+                      {client.recording_urls && client.recording_urls.length > 0 ? (
+                        <div className="flex flex-col gap-1">
+                          {client.recording_urls.map((urlObj, idx) => (
+                            <div key={urlObj.id || idx} className="max-w-48 truncate" title={urlObj.recording_url}>
+                              {urlObj.recording_url}
+                            </div>
+                          ))}
+                          <Badge variant="secondary" className="w-fit">
+                            {client.recording_urls.length} URL{client.recording_urls.length > 1 ? 's' : ''}
+                          </Badge>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
                     </td>
                     <td className="py-3 px-4">
                       <div className="flex items-center gap-2">
@@ -440,14 +527,13 @@ export function ClientManagement() {
         )}
       </CardContent>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={!!deletingClient} onOpenChange={() => setDeletingClient(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Delete Client</AlertDialogTitle>
             <AlertDialogDescription>
               Are you sure you want to delete "{deletingClient?.client_name}"? 
-              This action cannot be undone and will also delete all associated call records.
+              This action cannot be undone and will also delete all associated call records and recording URLs.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
