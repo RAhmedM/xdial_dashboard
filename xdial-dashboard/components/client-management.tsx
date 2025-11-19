@@ -1,5 +1,4 @@
 "use client"
-
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -71,13 +70,23 @@ export function ClientManagement() {
   const fetchClients = async () => {
     setLoading(true)
     try {
+      console.log('🔍 Fetching clients...')
       const response = await fetch('/api/clients')
       if (!response.ok) throw new Error('Failed to fetch clients')
-      
       const data = await response.json()
+      console.log('📊 Clients fetched:', data)
+      
+      // Log each client's recording URLs for debugging
+      data.forEach((client: Client) => {
+        console.log(`Client ${client.client_name} (ID: ${client.client_id}):`, {
+          recording_urls_count: client.recording_urls?.length || 0,
+          recording_urls: client.recording_urls
+        })
+      })
+      
       setClients(data)
     } catch (error) {
-      console.error('Error fetching clients:', error)
+      console.error('❌ Error fetching clients:', error)
       toast({
         title: "Error",
         description: "Failed to fetch clients",
@@ -111,14 +120,26 @@ export function ClientManagement() {
 
   const handleSubmit = async () => {
     if (!validateForm()) return
-
+    
     setSubmitting(true)
+    
     try {
       const url = editingClient ? `/api/clients/${editingClient.client_id}` : '/api/clients'
       const method = editingClient ? 'PUT' : 'POST'
       
       // Filter out empty URLs before sending
-      const cleanedUrls = formData.recording_urls.filter(url => url.trim() !== "")
+      const cleanedUrls = formData.recording_urls
+        .map(url => url.trim())
+        .filter(url => url !== "")
+      
+      console.log('💾 Submitting client data:', {
+        method,
+        url,
+        data: {
+          ...formData,
+          recording_urls: cleanedUrls
+        }
+      })
       
       const response = await fetch(url, {
         method,
@@ -128,21 +149,32 @@ export function ClientManagement() {
           recording_urls: cleanedUrls
         })
       })
-
-      if (!response.ok) throw new Error(`Failed to ${editingClient ? 'update' : 'create'} client`)
-
+      
+      const responseData = await response.json()
+      console.log('📥 Response from server:', responseData)
+      
+      if (!response.ok) {
+        throw new Error(responseData.error || `Failed to ${editingClient ? 'update' : 'create'} client`)
+      }
+      
       toast({
         title: "Success",
-        description: `Client ${editingClient ? 'updated' : 'created'} successfully`
+        description: `Client ${editingClient ? 'updated' : 'created'} successfully. ${cleanedUrls.length} recording URL(s) saved.`
       })
-
-      await fetchClients()
+      
+      // Close dialog first
       handleCloseDialog()
+      
+      // Then refresh the clients list after a brief delay to ensure DB updates are complete
+      setTimeout(async () => {
+        await fetchClients()
+      }, 100)
+      
     } catch (error) {
-      console.error('Error saving client:', error)
+      console.error('❌ Error saving client:', error)
       toast({
         title: "Error",
-        description: `Failed to ${editingClient ? 'update' : 'create'} client`,
+        description: error instanceof Error ? error.message : `Failed to ${editingClient ? 'update' : 'create'} client`,
         variant: "destructive"
       })
     } finally {
@@ -152,19 +184,19 @@ export function ClientManagement() {
 
   const handleDelete = async () => {
     if (!deletingClient) return
-
+    
     try {
       const response = await fetch(`/api/clients/${deletingClient.client_id}`, {
         method: 'DELETE'
       })
-
+      
       if (!response.ok) throw new Error('Failed to delete client')
-
+      
       toast({
         title: "Success",
         description: "Client deleted successfully"
       })
-
+      
       await fetchClients()
       setDeletingClient(null)
     } catch (error) {
@@ -178,12 +210,21 @@ export function ClientManagement() {
   }
 
   const handleEdit = (client: Client) => {
+    console.log('✏️ Editing client:', client)
+    console.log('Recording URLs from client:', client.recording_urls)
+    
     setEditingClient(client)
     
     // Get recording URLs from the client
-    const urls = client.recording_urls && client.recording_urls.length > 0 
-      ? client.recording_urls.map(u => u.recording_url)
-      : [client.fetch_recording_url || ""]
+    let urls: string[] = []
+    
+    if (client.recording_urls && client.recording_urls.length > 0) {
+      urls = client.recording_urls.map(u => u.recording_url)
+      console.log('✅ Using recording_urls array:', urls)
+    } else {
+      urls = [""]
+      console.log('⚠️ No URLs found, using empty array')
+    }
     
     setFormData({
       client_name: client.client_name,
@@ -192,6 +233,12 @@ export function ClientManagement() {
       call_data_url: client.call_data_url || "",
       recording_urls: urls.length > 0 ? urls : [""]
     })
+    
+    console.log('📝 Form data set to:', {
+      client_name: client.client_name,
+      recording_urls: urls
+    })
+    
     setIsDialogOpen(true)
   }
 
@@ -220,6 +267,15 @@ export function ClientManagement() {
   }
 
   const removeRecordingUrl = (index: number) => {
+    if (formData.recording_urls.length === 1) {
+      toast({
+        title: "Warning",
+        description: "At least one recording URL field is required",
+        variant: "destructive"
+      })
+      return
+    }
+    
     setFormData(prev => ({
       ...prev,
       recording_urls: prev.recording_urls.filter((_, i) => i !== index)
@@ -262,10 +318,11 @@ export function ClientManagement() {
         user: data.user,
         userType: data.userType
       }
+      
       localStorage.setItem(tempKey, JSON.stringify(authData))
 
       const newWindow = window.open(`/dashboard?tempAuth=${tempKey}`, '_blank')
-
+      
       if (!newWindow) {
         localStorage.removeItem(tempKey)
         toast({
@@ -297,7 +354,22 @@ export function ClientManagement() {
           <CardTitle className="text-lg font-semibold">Client Management</CardTitle>
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-blue-500 hover:bg-blue-600 text-white">
+              <Button 
+                className="bg-blue-500 hover:bg-blue-600 text-white"
+                onClick={() => {
+                  // Reset form when opening dialog for new client
+                  if (!editingClient) {
+                    setFormData({
+                      client_name: "",
+                      password: "",
+                      extension: "",
+                      call_data_url: "",
+                      recording_urls: [""]
+                    })
+                    setFormErrors({})
+                  }
+                }}
+              >
                 <Plus className="h-4 w-4 mr-2" />
                 Add Client
               </Button>
@@ -356,13 +428,13 @@ export function ClientManagement() {
                     id="call_data_url"
                     value={formData.call_data_url}
                     onChange={(e) => setFormData(prev => ({ ...prev, call_data_url: e.target.value }))}
-                    placeholder="Enter call data URL"
+                    placeholder="Enter call data URL (optional)"
                   />
                 </div>
 
                 <div>
                   <div className="flex items-center justify-between mb-2">
-                    <Label>Recording URLs *</Label>
+                    <Label>Recording URLs * (at least one required)</Label>
                     <Button
                       type="button"
                       size="sm"
@@ -375,25 +447,27 @@ export function ClientManagement() {
                     </Button>
                   </div>
                   
-                  <div className="space-y-2">
+                  <div className="space-y-3">
                     {formData.recording_urls.map((url, index) => (
-                      <div key={index} className="flex gap-2">
-                        <Input
-                          value={url}
-                          onChange={(e) => updateRecordingUrl(index, e.target.value)}
-                          placeholder={`Recording URL ${index + 1}`}
-                        />
-                        {formData.recording_urls.length > 1 && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => removeRecordingUrl(index)}
-                            className="text-red-600 hover:text-red-700"
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        )}
+                      <div key={index} className="flex gap-2 items-start">
+                        <div className="flex-1">
+                          <Input
+                            value={url}
+                            onChange={(e) => updateRecordingUrl(index, e.target.value)}
+                            placeholder={`Recording URL ${index + 1}`}
+                            className={formErrors.recording_urls && !url.trim() ? 'border-red-300' : ''}
+                          />
+                        </div>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeRecordingUrl(index)}
+                          disabled={formData.recording_urls.length === 1}
+                          className="text-red-600 hover:text-red-700 disabled:opacity-50"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
                       </div>
                     ))}
                   </div>
@@ -401,6 +475,10 @@ export function ClientManagement() {
                   {formErrors.recording_urls && (
                     <p className="text-sm text-red-500 mt-1">{formErrors.recording_urls}</p>
                   )}
+                  
+                  <p className="text-xs text-gray-500 mt-2">
+                    {formData.recording_urls.filter(u => u.trim()).length} valid URL(s)
+                  </p>
                 </div>
               </div>
 
@@ -413,7 +491,7 @@ export function ClientManagement() {
                   disabled={submitting}
                   className="bg-blue-500 hover:bg-blue-600 text-white"
                 >
-                  {submitting ? 'Saving...' : (editingClient ? 'Update' : 'Create')}
+                  {submitting ? 'Saving...' : (editingClient ? 'Update Client' : 'Create Client')}
                 </Button>
               </DialogFooter>
             </DialogContent>
@@ -471,9 +549,13 @@ export function ClientManagement() {
                     </td>
                     <td className="py-3 px-4 text-sm text-gray-600">
                       {client.recording_urls && client.recording_urls.length > 0 ? (
-                        <div className="flex flex-col gap-1">
+                        <div className="space-y-2">
                           {client.recording_urls.map((urlObj, idx) => (
-                            <div key={urlObj.id || idx} className="max-w-48 truncate" title={urlObj.recording_url}>
+                            <div 
+                              key={urlObj.id || idx} 
+                              className="max-w-xs truncate bg-gray-50 px-2 py-1 rounded text-xs" 
+                              title={urlObj.recording_url}
+                            >
                               {urlObj.recording_url}
                             </div>
                           ))}
@@ -482,7 +564,7 @@ export function ClientManagement() {
                           </Badge>
                         </div>
                       ) : (
-                        <span className="text-gray-400">-</span>
+                        <span className="text-gray-400">No URLs</span>
                       )}
                     </td>
                     <td className="py-3 px-4">
@@ -517,7 +599,7 @@ export function ClientManagement() {
                 ))}
               </tbody>
             </table>
-
+            
             {clients.length === 0 && (
               <div className="text-center py-8 text-gray-500">
                 No clients found. Add your first client to get started.

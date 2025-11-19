@@ -36,6 +36,7 @@ import {
 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { getUserFromStorage, getUserTypeFromStorage, setUserInStorage } from "@/lib/utils"
+import { CategoryChangeCards } from "@/components/category-change-cards"
 
 interface FilterState {
   search: string
@@ -695,6 +696,8 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
+
+          <CategoryChangeCards fiveMinChanges={categoryChanges.fiveMin} tenMinChanges={categoryChanges.tenMin}></CategoryChangeCards>
 
           
 
