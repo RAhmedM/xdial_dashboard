@@ -1,4 +1,6 @@
 // app/api/recordings/route.ts
+// MINIMAL CHANGES - Only fixing the core issues
+
 import { NextRequest, NextResponse } from 'next/server'
 import { Pool } from 'pg'
 import https from 'https'
@@ -13,6 +15,7 @@ interface CacheEntry {
   timestamp: number
   clientId: string
   date: string
+  urlCount: number  // FIX #3: Track how many URLs this cache represents
 }
 
 const recordingsCache = new Map<string, CacheEntry>()
@@ -129,27 +132,32 @@ export async function GET(request: NextRequest) {
     // Format date
     const formattedDate = date.replace(/-/g, '')
     const cacheKey = `${clientId}-${formattedDate}`
-    
-    // Check cache
+
+    // FIX #3: Enhanced cache validation
     const cachedEntry = recordingsCache.get(cacheKey)
     const now = Date.now()
-    
     let transformedRecordings: any[] = []
-    
-    if (cachedEntry && (now - cachedEntry.timestamp) < CACHE_DURATION && !forceRefresh) {
+    let warnings: string[] = []  // FIX #4: Track warnings
+
+    if (cachedEntry && 
+        (now - cachedEntry.timestamp) < CACHE_DURATION && 
+        !forceRefresh &&
+        cachedEntry.urlCount === recording_urls.length) {  // FIX #3: Validate URL count matches
+      
       console.log('📦 Using cached recordings data')
       transformedRecordings = cachedEntry.data
+      
     } else {
       console.log('🌐 Fetching fresh recordings from all URLs')
       
       if (cachedEntry) {
+        console.log('🗑️ Cache invalidated - URL count changed or expired')
         recordingsCache.delete(cacheKey)
       }
 
-      // Fetch recordings from all URLs in parallel
-      const allRecordings = new Map<string, any>() // Use Map to avoid duplicates
-      
-      for (const urlObj of recording_urls) {
+      // FIX #1: Use Promise.all to ensure all fetches complete before proceeding
+      const allRecordings = new Map<string, any>()
+      const fetchPromises = recording_urls.map(async (urlObj) => {
         const fetchUrl = urlObj.recording_url
         console.log(`📡 Fetching from: ${fetchUrl}`)
         
@@ -162,26 +170,62 @@ export async function GET(request: NextRequest) {
           
           console.log(`   ✅ Found ${Object.keys(recordings).length} recordings from this URL`)
           
-          // Merge recordings (use unique_id to avoid duplicates)
-          Object.entries(recordings).forEach(([key, rec]: [string, any]) => {
-            const uniqueId = `${rec.date}-${rec.time}_${rec.number}`
-            if (!allRecordings.has(uniqueId)) {
-              allRecordings.set(uniqueId, { key, rec, sourceUrl: fetchUrl })
-            }
-          })
+          // Return the recordings for this URL
+          return { success: true, url: fetchUrl, recordings }
+          
         } catch (error) {
           console.error(`   ❌ Error fetching from ${fetchUrl}:`, error.message)
-          // Continue with other URLs even if one fails
+          warnings.push(`Failed to fetch from ${fetchUrl}`)  // FIX #4: Track failure
+          return { success: false, url: fetchUrl, error: error.message }
         }
-      }
+      })
+
+      // FIX #1: Wait for ALL fetches to complete
+      const results = await Promise.all(fetchPromises)
+      
+      // Process all successful results
+      let successCount = 0
+      results.forEach(result => {
+        if (result.success) {
+          successCount++
+          Object.entries(result.recordings).forEach(([key, rec]: [string, any]) => {
+            // FIX #2: Better unique ID that includes source to avoid conflicts
+            const sourceHash = result.url.split('/').pop().substring(0, 6)
+            const uniqueId = `${rec.date}-${rec.time}_${rec.number}_${sourceHash}`
+            
+            if (!allRecordings.has(uniqueId)) {
+              allRecordings.set(uniqueId, { key, rec, sourceUrl: result.url })
+            }
+          })
+        }
+      })
 
       console.log(`📊 Total unique recordings across all URLs: ${allRecordings.size}`)
+      console.log(`✅ Successfully fetched from ${successCount}/${recording_urls.length} URLs`)
+      
+      // FIX #4: Alert user if some URLs failed
+      if (successCount < recording_urls.length) {
+        warnings.push(`Warning: Only ${successCount} of ${recording_urls.length} recording servers responded`)
+      }
+
+      // FIX #4: Don't proceed if ALL URLs failed
+      if (successCount === 0) {
+        return NextResponse.json({ 
+          error: 'All recording servers are unavailable',
+          recordings: [],
+          total: 0,
+          page: page,
+          limit: limit,
+          totalPages: 0,
+          warnings: warnings.join('; ')
+        }, { status: 503 })
+      }
 
       // Transform all recordings
       transformedRecordings = Array.from(allRecordings.values()).map(({ key, rec, sourceUrl }) => {
         const originalUrl = rec.url || ''
         const proxyUrl = originalUrl ? `/api/audio?url=${encodeURIComponent(originalUrl)}&client_id=${clientId}` : ''
-        
+
         return {
           id: key,
           unique_id: `${rec.date}-${rec.time}_${rec.number}`,
@@ -194,19 +238,20 @@ export async function GET(request: NextRequest) {
           original_url: originalUrl,
           size: rec.size || '',
           filename: rec.name || '',
-          source_url: sourceUrl // Track which URL this came from
+          source_url: sourceUrl
         }
       })
 
-      // Cache the data
+      // FIX #3: Cache with URL count validation
       recordingsCache.set(cacheKey, {
         data: transformedRecordings,
         timestamp: now,
         clientId: clientId.toString(),
-        date: formattedDate
+        date: formattedDate,
+        urlCount: recording_urls.length  // FIX #3: Store URL count
       })
       
-      console.log(`💾 Cached ${transformedRecordings.length} recordings`)
+      console.log(`💾 Cached ${transformedRecordings.length} recordings from ${successCount} URLs`)
     }
 
     // Apply search filter
@@ -263,7 +308,7 @@ export async function GET(request: NextRequest) {
 
     const totalRecordings = filteredRecordings.length
     const totalPages = Math.ceil(totalRecordings / limit)
-    
+
     // Apply pagination
     const startIndex = (page - 1) * limit
     const endIndex = startIndex + limit
@@ -292,6 +337,7 @@ export async function GET(request: NextRequest) {
       cached: cachedEntry && (now - cachedEntry.timestamp) < CACHE_DURATION && !forceRefresh,
       source: 'external_api_multi_url',
       source_urls_count: recording_urls.length,
+      warning: warnings.length > 0 ? warnings.join('; ') : undefined,  // FIX #4: Include warnings
       success: true
     })
 
@@ -326,11 +372,12 @@ async function fetchFromUrl(apiUrl: string): Promise<string> {
         'User-Agent': 'XDialNetworks-Dashboard/1.0',
         'Cache-Control': 'no-cache'
       },
-      rejectUnauthorized: false // Bypass SSL verification
+      rejectUnauthorized: false
     }
 
     const req = https.request(options, (res) => {
       let data = ''
+      
       res.on('data', (chunk) => {
         data += chunk
       })
@@ -360,6 +407,7 @@ async function fetchFromUrl(apiUrl: string): Promise<string> {
 // Helper functions
 function durationToSeconds(duration: string): number {
   if (!duration) return 0
+  
   if (duration.includes(':')) {
     const parts = duration.split(':').map(p => parseInt(p) || 0)
     if (parts.length === 3) {
@@ -368,15 +416,18 @@ function durationToSeconds(duration: string): number {
       return parts[0] * 60 + parts[1]
     }
   }
+  
   return parseInt(duration) || 0
 }
 
 function sizeToBytes(size: string): number {
   if (!size) return 0
+  
   const match = size.match(/^([\d.]+)\s*([KMGT]?B)$/i)
   if (match) {
     const value = parseFloat(match[1])
     const unit = match[2].toUpperCase()
+    
     switch (unit) {
       case 'KB': return value * 1024
       case 'MB': return value * 1024 * 1024
@@ -385,6 +436,7 @@ function sizeToBytes(size: string): number {
       default: return value
     }
   }
+  
   return 0
 }
 
