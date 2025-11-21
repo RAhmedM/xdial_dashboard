@@ -77,59 +77,12 @@ type SortField = 'call_id' | 'phone_number' | 'list_id' | 'response_category' | 
 type SortDirection = 'asc' | 'desc'
 
 const callOutcomes = [
-  {
-    id: "answering-machine",
-    title: "Answering Machine",
-    icon: Phone,
-    iconColor: "text-blue-500",
-  },
+  // Row 1
   {
     id: "interested",
-    title: "Interested",
+    title: "Qualified",
     icon: Star,
     iconColor: "text-green-500",
-  },
-  {
-    id: "not-interested",
-    title: "Not Interested",
-    icon: X,
-    iconColor: "text-red-500",
-  },
-  {
-    id: "do-not-call",
-    title: "Do Not Call",
-    icon: Ban,
-    iconColor: "text-pink-500",
-  },
-  {
-    id: "do-not-qualify",
-    title: "Do Not Qualify",
-    icon: AlertTriangle,
-    iconColor: "text-yellow-500",
-  },
-  {
-    id: "unknown",
-    title: "Unknown",
-    icon: HelpCircle,
-    iconColor: "text-gray-500",
-  },
-  {
-    id: "Honeypot",
-    title: "Honeypot",
-    icon: Shield,
-    iconColor: "text-purple-500",
-  },
-  {
-    id: "User_Silent",
-    title: "User Silent",
-    icon: MicOff,
-    iconColor: "text-slate-500",
-  },
-  {
-    id: "INAUDIBLE",
-    title: "INAUDIBLE",
-    icon: VolumeX,
-    iconColor: "text-orange-500",
   },
   {
     id: "neutral",
@@ -138,14 +91,63 @@ const callOutcomes = [
     iconColor: "text-gray-400",
   },
   {
+    id: "unknown",
+    title: "Unclear Response",
+    icon: HelpCircle,
+    iconColor: "text-gray-500",
+  },
+  {
+    id: "INAUDIBLE",
+    title: "Inaudible",
+    icon: VolumeX,
+    iconColor: "text-orange-500",
+  },
+  // Row 2
+  {
+    id: "answering-machine",
+    title: "Answering Machine",
+    icon: Phone,
+    iconColor: "text-blue-500",
+  },
+  {
     id: "NA",
-    title: "NA",
+    title: "DAIR",
     icon: Minus,
     iconColor: "text-gray-600",
   },
   {
+    id: "Honeypot",
+    title: "Honeypot",
+    icon: Shield,
+    iconColor: "text-purple-500",
+  },
+  {
+    id: "do-not-call",
+    title: "DNC",
+    icon: Ban,
+    iconColor: "text-pink-500",
+  },
+  {
+    id: "do-not-qualify",
+    title: "DNQ",
+    icon: AlertTriangle,
+    iconColor: "text-yellow-500",
+  },
+  {
+    id: "not-interested",
+    title: "Not Interested",
+    icon: X,
+    iconColor: "text-red-500",
+  },
+  {
+    id: "User_Silent",
+    title: "User Silent",
+    icon: MicOff,
+    iconColor: "text-slate-500",
+  },
+  {
     id: "USER-HUNGUP",
-    title: "User Hung Up",
+    title: "User Hang Up",
     icon: PhoneOff,
     iconColor: "text-red-600",
   },
@@ -184,12 +186,18 @@ export default function DashboardPage() {
   const [selectAllOutcomes, setSelectAllOutcomes] = useState(false)
   
   const [categoryChanges, setCategoryChanges] = useState<{
-    fiveMin: OutcomeCounts
-    tenMin: OutcomeCounts
-  }>({
-    fiveMin: {},
-    tenMin: {}
-  })
+  fiveMin: OutcomeCounts
+  tenMin: OutcomeCounts
+  thirtyMin: OutcomeCounts
+  oneHour: OutcomeCounts
+  oneDay: OutcomeCounts
+}>({
+  fiveMin: {},
+  tenMin: {},
+  thirtyMin: {},
+  oneHour: {},
+  oneDay: {}
+})
   
   const [transcriptPopup, setTranscriptPopup] = useState<{
     isOpen: boolean
@@ -389,23 +397,33 @@ export default function DashboardPage() {
   }
 
   const fetchCategoryChanges = async () => {
-    try {
-      const params = buildApiParams(false)
-      
-      const fiveMinResponse = await fetch(`/api/calls/category-changes?${params}&interval=5`)
-      const fiveMinData = await fiveMinResponse.ok ? await fiveMinResponse.json() : {}
-      
-      const tenMinResponse = await fetch(`/api/calls/category-changes?${params}&interval=10`)
-      const tenMinData = await tenMinResponse.ok ? await tenMinResponse.json() : {}
-      
-      setCategoryChanges({
-        fiveMin: fiveMinData,
-        tenMin: tenMinData
-      })
-    } catch (error) {
-      console.error('Error fetching category changes:', error)
-    }
+  try {
+    const params = buildApiParams(false)
+    
+    const [fiveMinData, tenMinData, thirtyMinData, oneHourData, oneDayData] = await Promise.all([
+      fetch(`/api/calls/category-changes?${params}&interval=5`)
+        .then(res => res.ok ? res.json() : {}),
+      fetch(`/api/calls/category-changes?${params}&interval=10`)
+        .then(res => res.ok ? res.json() : {}),
+      fetch(`/api/calls/category-changes?${params}&interval=30`)
+        .then(res => res.ok ? res.json() : {}),
+      fetch(`/api/calls/category-changes?${params}&interval=60`)
+        .then(res => res.ok ? res.json() : {}),
+      fetch(`/api/calls/category-changes?${params}&interval=1440`)
+        .then(res => res.ok ? res.json() : {})
+    ])
+    
+    setCategoryChanges({
+      fiveMin: fiveMinData,
+      tenMin: tenMinData,
+      thirtyMin: thirtyMinData,
+      oneHour: oneHourData,
+      oneDay: oneDayData
+    })
+  } catch (error) {
+    console.error('Error fetching category changes:', error)
   }
+}
 
   const handleFilterChange = (key: keyof FilterState, value: string | string[]) => {
     setFilters(prev => ({ ...prev, [key]: value }))
@@ -668,8 +686,63 @@ export default function DashboardPage() {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2">
-                  {callOutcomes.map((outcome) => (
+                {/* Row 1: Qualified, Neutral, Unclear Response, Inaudible */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                  {callOutcomes.slice(0, 4).map((outcome) => (
+                    <div key={outcome.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={outcome.id}
+                        checked={filters.selectedOutcomes.includes(outcome.id)}
+                        onCheckedChange={(checked) => 
+                          handleOutcomeToggle(outcome.id, checked as boolean)
+                        }
+                      />
+                      <label
+                        htmlFor={outcome.id}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1"
+                      >
+                        <outcome.icon className={`h-3 w-3 ${outcome.iconColor}`} />
+                        <span>{outcome.title}</span>
+                        {outcomeCounts[outcome.id] !== undefined && (
+                          <span className="text-xs text-gray-500">
+                            ({outcomeCounts[outcome.id] || 0})
+                          </span>
+                        )}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Row 2: Answering Machine, DAIR, Honeypot, DNC */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 mb-2">
+                  {callOutcomes.slice(4, 8).map((outcome) => (
+                    <div key={outcome.id} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={outcome.id}
+                        checked={filters.selectedOutcomes.includes(outcome.id)}
+                        onCheckedChange={(checked) => 
+                          handleOutcomeToggle(outcome.id, checked as boolean)
+                        }
+                      />
+                      <label
+                        htmlFor={outcome.id}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 flex items-center gap-1"
+                      >
+                        <outcome.icon className={`h-3 w-3 ${outcome.iconColor}`} />
+                        <span>{outcome.title}</span>
+                        {outcomeCounts[outcome.id] !== undefined && (
+                          <span className="text-xs text-gray-500">
+                            ({outcomeCounts[outcome.id] || 0})
+                          </span>
+                        )}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Row 3: DNQ, Not Interested, User Silent, User Hang Up */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {callOutcomes.slice(8).map((outcome) => (
                     <div key={outcome.id} className="flex items-center space-x-2">
                       <Checkbox
                         id={outcome.id}
@@ -697,8 +770,13 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
 
-          <CategoryChangeCards fiveMinChanges={categoryChanges.fiveMin} tenMinChanges={categoryChanges.tenMin}></CategoryChangeCards>
-
+          <CategoryChangeCards 
+            fiveMinChanges={categoryChanges.fiveMin} 
+            tenMinChanges={categoryChanges.tenMin}
+            thirtyMinChanges={categoryChanges.thirtyMin}
+            oneHourChanges={categoryChanges.oneHour}
+            oneDayChanges={categoryChanges.oneDay}
+          />
           
 
           {/* Results Section */}

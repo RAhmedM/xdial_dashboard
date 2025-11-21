@@ -175,7 +175,6 @@ export async function GET(request: NextRequest) {
           
         } catch (error) {
           console.error(`   ❌ Error fetching from ${fetchUrl}:`, error.message)
-          warnings.push(`Failed to fetch from ${fetchUrl}`)  // FIX #4: Track failure
           return { success: false, url: fetchUrl, error: error.message }
         }
       })
@@ -205,7 +204,7 @@ export async function GET(request: NextRequest) {
       
       // FIX #4: Alert user if some URLs failed
       if (successCount < recording_urls.length) {
-        warnings.push(`Warning: Only ${successCount} of ${recording_urls.length} recording servers responded`)
+        console.error(`Warning: Only ${successCount} of ${recording_urls.length} recording servers responded`)
       }
 
       // FIX #4: Don't proceed if ALL URLs failed

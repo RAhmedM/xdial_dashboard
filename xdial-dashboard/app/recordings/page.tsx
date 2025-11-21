@@ -604,7 +604,7 @@ export default function RecordingsPage() {
             <Alert className="mb-6 border-red-200 bg-red-50">
               <AlertTriangle className="h-4 w-4 text-red-600" />
               <AlertDescription className="text-red-800">
-                {"Recordings not found!"}
+                {"Recordings not found!\nPlease select correct date."}
                 <Button
                   variant="ghost"
                   size="sm"

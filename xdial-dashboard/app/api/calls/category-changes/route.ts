@@ -6,15 +6,30 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
 })
 
+// Define all possible categories
+const ALL_CATEGORIES = [
+  'interested',
+  'neutral',
+  'unknown',
+  'INAUDIBLE',
+  'do-not-call',
+  'do-not-qualify',
+  'answering-machine',
+  'not-interested',
+  'Honeypot',
+  'User_Silent',
+  'NA',
+  'USER-HUNGUP',
+]
+
 // Normalize category names to match frontend expectations
 function normalizeCategory(category: string): string {
   if (!category) return 'unknown'
   
   const normalized = category.toLowerCase()
-    .replace(/\s+/g, '-')  // "Not Interested" → "not-interested"
-    .replace(/_/g, '-')     // "User_Silent" → "user-silent"
+    .replace(/\s+/g, '-')
+    .replace(/_/g, '-')
   
-  // Map specific cases
   const categoryMap: { [key: string]: string } = {
     'interested': 'interested',
     'not-interested': 'not-interested',
@@ -45,7 +60,6 @@ export async function GET(request: NextRequest) {
 
     const now = new Date()
     
-    // FIXED: Compare two equal time windows
     // Current period: now - interval minutes to now
     const currentPeriodStart = new Date(now.getTime() - interval * 60000)
     
@@ -55,8 +69,14 @@ export async function GET(request: NextRequest) {
 
     console.log('📊 Time Periods:', {
       interval: `${interval} minutes`,
-      current: { start: currentPeriodStart.toISOString(), end: now.toISOString() },
-      previous: { start: previousPeriodStart.toISOString(), end: previousPeriodEnd.toISOString() }
+      current: {
+        start: currentPeriodStart.toISOString(),
+        end: now.toISOString()
+      },
+      previous: {
+        start: previousPeriodStart.toISOString(),
+        end: previousPeriodEnd.toISOString()
+      }
     })
 
     // Build base conditions for filtering (applies to both periods)
@@ -128,19 +148,11 @@ export async function GET(request: NextRequest) {
       GROUP BY response_category
     `
 
-    console.log('📈 Current Query:', currentQuery)
-    console.log('📈 Current Params:', currentParams)
-    console.log('📉 Previous Query:', previousQuery)
-    console.log('📉 Previous Params:', previousParams)
-
     // Execute both queries
     const [currentResult, previousResult] = await Promise.all([
       pool.query(currentQuery, currentParams),
       pool.query(previousQuery, previousParams)
     ])
-
-    console.log('📊 Current Results:', currentResult.rows)
-    console.log('📊 Previous Results:', previousResult.rows)
 
     // Build maps with normalized category names
     const currentPercentages: { [key: string]: { percentage: number; count: number } } = {}
@@ -165,35 +177,19 @@ export async function GET(request: NextRequest) {
     const currentTotalCalls = Object.values(currentPercentages).reduce((sum, v) => sum + v.count, 0)
     const previousTotalCalls = Object.values(previousPercentages).reduce((sum, v) => sum + v.count, 0)
 
-    console.log('📊 Total Calls:', { current: currentTotalCalls, previous: previousTotalCalls })
-
-    // Calculate percentage point changes
+    // Calculate percentage point changes for ALL categories
     const percentageChanges: { [key: string]: string | number } = {}
     
-    // Get all unique categories from both periods
-    const allCategories = new Set([
-      ...Object.keys(currentPercentages),
-      ...Object.keys(previousPercentages)
-    ])
-
-    allCategories.forEach(category => {
+    // Include ALL categories, even if they have 0 calls in both periods
+    ALL_CATEGORIES.forEach(category => {
       const current = currentPercentages[category]?.percentage || 0
       const previous = previousPercentages[category]?.percentage || 0
       
-      // Calculate percentage POINT change (not relative change)
-      // e.g., 25% - 20% = +5 percentage points
+      // Calculate percentage POINT change
       const change = current - previous
       
-      // Only include categories with meaningful changes (> 0.1% change)
-      // This filters out noise from rounding
-      if (Math.abs(change) < 0.1) {
-        percentageChanges[category] = 0
-      } else {
-        // Format with + for positive values
-        percentageChanges[category] = change > 0 
-          ? `+${change.toFixed(1)}` 
-          : change.toFixed(1)
-      }
+      // Format with + for positive values, always include the category
+      percentageChanges[category] = change > 0 ? `+${change.toFixed(1)}` : change.toFixed(1)
     })
 
     console.log('✅ Current Percentages:', currentPercentages)
@@ -222,6 +218,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       process.env.NODE_ENV === 'development' ? response : percentageChanges
     )
+
   } catch (error: any) {
     console.error('❌ Error fetching category changes:', error)
     return NextResponse.json(
