@@ -211,9 +211,19 @@ export function CategoryChangeCards({
       return total / list.length
     }
 
-    const leftAvg = calcWeightedAverage(leftSide)
-    const rightAvg = calcAverage(rightSide)
-    return leftAvg - rightAvg
+    const engagedAvg = calcWeightedAverage(leftSide)
+    const dropoffAvg = calcAverage(rightSide)
+    
+    // Use absolute values in denominator to handle negatives properly
+    const denominator = Math.abs(engagedAvg) + Math.abs(dropoffAvg)
+    
+    // If no change at all, return 50 (neutral)
+    if (denominator === 0) return 50
+    
+    // Calculate ratio and normalize to 0-100% scale
+    // Engaged positive = good (> 50%), Dropoff positive = bad (< 50%)
+    const ratio = engagedAvg / denominator
+    return ratio * 50 + 50
   }
 
   const netPerformance = calculateNetPerformance(currentChanges)
@@ -263,18 +273,14 @@ export function CategoryChangeCards({
 
             <div
               className={`px-4 py-2 rounded-lg font-bold text-lg ${
-                netPerformance > 0
+                netPerformance > 50
                   ? "bg-green-100 text-green-800"
-                  : netPerformance < 0
+                  : netPerformance < 50
                   ? "bg-red-100 text-red-800"
                   : "bg-gray-100 text-gray-800"
               }`}
             >
-              {netPerformance > 0
-                ? `↑${netPerformance.toFixed(1)}%`
-                : netPerformance < 0
-                ? `↓${Math.abs(netPerformance).toFixed(1)}%`
-                : "0%"}
+              {netPerformance.toFixed(1)}%
             </div>
           </div>
         </CardHeader>

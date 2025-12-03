@@ -812,13 +812,16 @@ export default function RecordingsPage() {
                                           autoPlay
                                           className="w-32"
                                           onEnded={() => setPlayingId(null)}
+                                          onError={(e) => {
+                                            console.error('Audio playback error:', e)
+                                            console.error('Failed URL:', recording.audio_url)
+                                            setError('Failed to play audio. Please try downloading instead.')
+                                          }}
                                         >
                                           <source src={recording.audio_url} type="audio/wav" />
-                                          <source src={recording.audio_url} type="audio/mpeg" />
                                           Your browser does not support the audio element.
                                         </audio>
-                                      )}
-                                    </div>
+                                      )}                                    </div>
                                   )}
 
                                   {/* Download Button */}

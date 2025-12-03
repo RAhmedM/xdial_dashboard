@@ -16,6 +16,9 @@ export async function GET(request: NextRequest) {
     const audioUrl = searchParams.get('url')
     const clientId = searchParams.get('client_id')
     
+    console.log(`📥 Audio URL: ${audioUrl}`)
+    console.log(`📥 Client ID: ${clientId}`)
+    
     if (!audioUrl || !clientId) {
       console.log('❌ Missing required parameters')
       return NextResponse.json({ 
@@ -23,126 +26,144 @@ export async function GET(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Fetch client's fetch_recording_url from database for security validation
-    console.log(`🔍 Validating client ${clientId} for audio access...`)
-    const clientResult = await pool.query(
-      'SELECT fetch_recording_url FROM clients WHERE client_id = $1',
-      [parseInt(clientId)]
-    )
+    // Validate client and get recording URLs
+    console.log(`🔍 Validating client ${clientId}...`)
+    const clientResult = await pool.query(`
+      SELECT cru.recording_url 
+      FROM client_recording_urls cru
+      WHERE cru.client_id = $1
+    `, [parseInt(clientId)])
 
     if (clientResult.rows.length === 0) {
-      console.log('❌ Client not found in database')
+      console.log('❌ No recording URLs configured')
       return NextResponse.json({ 
-        error: 'Invalid client' 
-      }, { status: 404 })
-    }
-
-    const client = clientResult.rows[0]
-    const clientRecordingUrl = client.fetch_recording_url
-
-    if (!clientRecordingUrl) {
-      console.log('❌ Client has no recording URL configured')
-      return NextResponse.json({ 
-        error: 'Client recording URL not configured' 
+        error: 'Client recording URLs not configured' 
       }, { status: 400 })
     }
 
-    // Validate that the audio URL is from the same domain as the client's recording API
-    const audioUrlObj = new URL(audioUrl)
-    const clientUrlObj = new URL(clientRecordingUrl)
+    // Extract valid domains
+    const validDomains = clientResult.rows
+      .map(row => {
+        try {
+          return new URL(row.recording_url).hostname
+        } catch (e) {
+          return null
+        }
+      })
+      .filter(Boolean)
 
-    if (audioUrlObj.hostname !== clientUrlObj.hostname) {
-      console.log(`❌ Invalid audio URL domain: ${audioUrlObj.hostname}, expected: ${clientUrlObj.hostname}`)
+    if (validDomains.length === 0) {
+      console.log('❌ No valid domains')
+      return NextResponse.json({ 
+        error: 'No valid recording URLs configured' 
+      }, { status: 400 })
+    }
+
+    // Validate audio URL domain
+    const audioUrlObj = new URL(audioUrl)
+    
+    if (!validDomains.includes(audioUrlObj.hostname)) {
+      console.log(`❌ Invalid domain: ${audioUrlObj.hostname}`)
       return NextResponse.json({ 
         error: 'Invalid audio URL domain for this client' 
       }, { status: 403 })
     }
 
-    console.log(`🌐 Proxying audio file from ${audioUrlObj.hostname}: ${audioUrl}`)
+    console.log(`✅ Domain validated: ${audioUrlObj.hostname}`)
+    console.log(`🌐 Proxying: ${audioUrl}`)
 
-    // Fetch the audio file from the external server
-    const audioData = await new Promise<Buffer>((resolve, reject) => {
+    // Fetch audio with proper binary handling
+    const audioBuffer = await new Promise<Buffer>((resolve, reject) => {
       const options = {
         hostname: audioUrlObj.hostname,
         port: audioUrlObj.port || 443,
         path: audioUrlObj.pathname + audioUrlObj.search,
         method: 'GET',
         headers: {
-          'User-Agent': 'XDialNetworks-Dashboard/1.0',
-          'Accept': 'audio/*,*/*',
+          'User-Agent': 'Mozilla/5.0',
+          'Accept': '*/*',
         },
-        // Bypass SSL certificate validation
         rejectUnauthorized: false
       }
 
       const req = https.request(options, (res) => {
-        console.log(`📡 Audio response status: ${res.statusCode}`)
-        console.log(`📡 Audio response headers:`, res.headers)
+        console.log(`📡 Status: ${res.statusCode}`)
+        console.log(`📡 Content-Type: ${res.headers['content-type']}`)
+        console.log(`📡 Content-Length: ${res.headers['content-length']}`)
 
         if (res.statusCode !== 200) {
-          reject(new Error(`HTTP ${res.statusCode}: ${res.statusMessage}`))
+          reject(new Error(`HTTP ${res.statusCode}`))
           return
         }
 
         const chunks: Buffer[] = []
         
         res.on('data', (chunk) => {
-          chunks.push(chunk)
+          chunks.push(Buffer.from(chunk))
         })
         
         res.on('end', () => {
           const buffer = Buffer.concat(chunks)
-          console.log(`✅ Audio file received: ${buffer.length} bytes`)
+          console.log(`✅ Received ${buffer.length} bytes`)
+          
+          // Verify it's audio data (WAV starts with RIFF)
+          const header = buffer.slice(0, 4).toString('ascii')
+          console.log(`🔍 File header: ${header}`)
+          
           resolve(buffer)
         })
       })
 
       req.on('error', (error) => {
-        console.error('🚨 HTTPS request error:', error)
+        console.error('🚨 Request error:', error)
         reject(error)
       })
 
       req.setTimeout(60000, () => {
-        console.log('⏰ Audio request timeout after 60 seconds')
         req.destroy()
-        reject(new Error('Request timeout'))
+        reject(new Error('Timeout'))
       })
 
       req.end()
     })
 
-    // Determine content type based on file extension
+    // Determine content type from URL extension
     let contentType = 'audio/wav'
-    if (audioUrl.toLowerCase().endsWith('.mp3')) {
-      contentType = 'audio/mpeg'
-    } else if (audioUrl.toLowerCase().endsWith('.m4a')) {
-      contentType = 'audio/m4a'
-    } else if (audioUrl.toLowerCase().endsWith('.ogg')) {
-      contentType = 'audio/ogg'
+    const ext = audioUrl.toLowerCase().split('.').pop()
+    
+    switch (ext) {
+      case 'mp3':
+        contentType = 'audio/mpeg'
+        break
+      case 'wav':
+        contentType = 'audio/wav'
+        break
+      case 'm4a':
+        contentType = 'audio/mp4'
+        break
+      case 'ogg':
+        contentType = 'audio/ogg'
+        break
     }
 
-    // Return the audio file with proper headers
-    const response = new NextResponse(audioData, {
+    console.log(`📤 Returning ${audioBuffer.length} bytes as ${contentType}`)
+
+    // Return with minimal headers
+    return new NextResponse(audioBuffer, {
       status: 200,
       headers: {
         'Content-Type': contentType,
-        'Content-Length': audioData.length.toString(),
-        'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+        'Content-Length': audioBuffer.length.toString(),
         'Accept-Ranges': 'bytes',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'GET',
-        'Access-Control-Allow-Headers': 'Content-Type, Range',
+        'Cache-Control': 'public, max-age=3600',
       },
     })
 
-    console.log(`🎵 Successfully proxied audio file: ${audioData.length} bytes`)
-    return response
-
   } catch (error) {
-    console.error('💥 Error in audio proxy:', error)
+    console.error('💥 Error:', error.message)
     
     return NextResponse.json({ 
-      error: 'Failed to fetch audio file',
+      error: 'Failed to fetch audio',
       details: error.message
     }, { status: 500 })
   }

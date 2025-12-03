@@ -56,6 +56,7 @@ export function ClientManagement() {
   const [editingClient, setEditingClient] = useState<Client | null>(null)
   const [deletingClient, setDeletingClient] = useState<Client | null>(null)
   const [showPasswords, setShowPasswords] = useState<Record<number, boolean>>({})
+  const [searchQuery, setSearchQuery] = useState("")
   const [formData, setFormData] = useState<ClientFormData>({
     client_name: "",
     password: "",
@@ -66,6 +67,14 @@ export function ClientManagement() {
   const [formErrors, setFormErrors] = useState<Record<string, string>>({})
   const [submitting, setSubmitting] = useState(false)
   const { toast } = useToast()
+
+  const filteredClients = clients.filter(client => {
+    const query = searchQuery.toLowerCase()
+    return (
+      client.client_id.toString().includes(query) ||
+      client.client_name.toLowerCase().includes(query)
+    )
+  })
 
   const fetchClients = async () => {
     setLoading(true)
@@ -350,152 +359,169 @@ export function ClientManagement() {
   return (
     <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg font-semibold">Client Management</CardTitle>
-          <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-            <DialogTrigger asChild>
-              <Button 
-                className="bg-blue-500 hover:bg-blue-600 text-white"
-                onClick={() => {
-                  // Reset form when opening dialog for new client
-                  if (!editingClient) {
-                    setFormData({
-                      client_name: "",
-                      password: "",
-                      extension: "",
-                      call_data_url: "",
-                      recording_urls: [""]
-                    })
-                    setFormErrors({})
-                  }
-                }}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Client
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingClient ? 'Edit Client' : 'Add New Client'}
-                </DialogTitle>
-              </DialogHeader>
-              
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="client_name">Client Name *</Label>
-                  <Input
-                    id="client_name"
-                    value={formData.client_name}
-                    onChange={(e) => setFormData(prev => ({ ...prev, client_name: e.target.value }))}
-                    placeholder="Enter client name"
-                  />
-                  {formErrors.client_name && (
-                    <p className="text-sm text-red-500 mt-1">{formErrors.client_name}</p>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="password">Password *</Label>
-                  <Input
-                    id="password"
-                    type="password"
-                    value={formData.password}
-                    onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
-                    placeholder="Enter password"
-                  />
-                  {formErrors.password && (
-                    <p className="text-sm text-red-500 mt-1">{formErrors.password}</p>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="extension">Extension *</Label>
-                  <Input
-                    id="extension"
-                    value={formData.extension}
-                    onChange={(e) => setFormData(prev => ({ ...prev, extension: e.target.value }))}
-                    placeholder="Enter extension"
-                  />
-                  {formErrors.extension && (
-                    <p className="text-sm text-red-500 mt-1">{formErrors.extension}</p>
-                  )}
-                </div>
-
-                <div>
-                  <Label htmlFor="call_data_url">Call Data URL</Label>
-                  <Input
-                    id="call_data_url"
-                    value={formData.call_data_url}
-                    onChange={(e) => setFormData(prev => ({ ...prev, call_data_url: e.target.value }))}
-                    placeholder="Enter call data URL (optional)"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <Label>Recording URLs * (at least one required)</Label>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={addRecordingUrl}
-                      className="h-8"
-                    >
-                      <Plus className="h-3 w-3 mr-1" />
-                      Add URL
-                    </Button>
-                  </div>
-                  
-                  <div className="space-y-3">
-                    {formData.recording_urls.map((url, index) => (
-                      <div key={index} className="flex gap-2 items-start">
-                        <div className="flex-1">
-                          <Input
-                            value={url}
-                            onChange={(e) => updateRecordingUrl(index, e.target.value)}
-                            placeholder={`Recording URL ${index + 1}`}
-                            className={formErrors.recording_urls && !url.trim() ? 'border-red-300' : ''}
-                          />
-                        </div>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeRecordingUrl(index)}
-                          disabled={formData.recording_urls.length === 1}
-                          className="text-red-600 hover:text-red-700 disabled:opacity-50"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                  </div>
-                  
-                  {formErrors.recording_urls && (
-                    <p className="text-sm text-red-500 mt-1">{formErrors.recording_urls}</p>
-                  )}
-                  
-                  <p className="text-xs text-gray-500 mt-2">
-                    {formData.recording_urls.filter(u => u.trim()).length} valid URL(s)
-                  </p>
-                </div>
-              </div>
-
-              <DialogFooter>
-                <Button variant="outline" onClick={handleCloseDialog}>
-                  Cancel
-                </Button>
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg font-semibold">Client Management</CardTitle>
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+              <DialogTrigger asChild>
                 <Button 
-                  onClick={handleSubmit} 
-                  disabled={submitting}
                   className="bg-blue-500 hover:bg-blue-600 text-white"
+                  onClick={() => {
+                    // Reset form when opening dialog for new client
+                    if (!editingClient) {
+                      setFormData({
+                        client_name: "",
+                        password: "",
+                        extension: "",
+                        call_data_url: "",
+                        recording_urls: [""]
+                      })
+                      setFormErrors({})
+                    }
+                  }}
                 >
-                  {submitting ? 'Saving...' : (editingClient ? 'Update Client' : 'Create Client')}
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Client
                 </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+                <DialogHeader>
+                  <DialogTitle>
+                    {editingClient ? 'Edit Client' : 'Add New Client'}
+                  </DialogTitle>
+                </DialogHeader>
+                
+                <div className="space-y-4">
+                  <div>
+                    <Label htmlFor="client_name">Client Name *</Label>
+                    <Input
+                      id="client_name"
+                      value={formData.client_name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, client_name: e.target.value }))}
+                      placeholder="Enter client name"
+                    />
+                    {formErrors.client_name && (
+                      <p className="text-sm text-red-500 mt-1">{formErrors.client_name}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="password">Password *</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      value={formData.password}
+                      onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
+                      placeholder="Enter password"
+                    />
+                    {formErrors.password && (
+                      <p className="text-sm text-red-500 mt-1">{formErrors.password}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="extension">Extension *</Label>
+                    <Input
+                      id="extension"
+                      value={formData.extension}
+                      onChange={(e) => setFormData(prev => ({ ...prev, extension: e.target.value }))}
+                      placeholder="Enter extension"
+                    />
+                    {formErrors.extension && (
+                      <p className="text-sm text-red-500 mt-1">{formErrors.extension}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="call_data_url">Call Data URL</Label>
+                    <Input
+                      id="call_data_url"
+                      value={formData.call_data_url}
+                      onChange={(e) => setFormData(prev => ({ ...prev, call_data_url: e.target.value }))}
+                      placeholder="Enter call data URL (optional)"
+                    />
+                  </div>
+
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <Label>Recording URLs * (at least one required)</Label>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={addRecordingUrl}
+                        className="h-8"
+                      >
+                        <Plus className="h-3 w-3 mr-1" />
+                        Add URL
+                      </Button>
+                    </div>
+                    
+                    <div className="space-y-3">
+                      {formData.recording_urls.map((url, index) => (
+                        <div key={index} className="flex gap-2 items-start">
+                          <div className="flex-1">
+                            <Input
+                              value={url}
+                              onChange={(e) => updateRecordingUrl(index, e.target.value)}
+                              placeholder={`Recording URL ${index + 1}`}
+                              className={formErrors.recording_urls && !url.trim() ? 'border-red-300' : ''}
+                            />
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => removeRecordingUrl(index)}
+                            disabled={formData.recording_urls.length === 1}
+                            className="text-red-600 hover:text-red-700 disabled:opacity-50"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ))}
+                    </div>
+                    
+                    {formErrors.recording_urls && (
+                      <p className="text-sm text-red-500 mt-1">{formErrors.recording_urls}</p>
+                    )}
+                    
+                    <p className="text-xs text-gray-500 mt-2">
+                      {formData.recording_urls.filter(u => u.trim()).length} valid URL(s)
+                    </p>
+                  </div>
+                </div>
+
+                <DialogFooter>
+                  <Button variant="outline" onClick={handleCloseDialog}>
+                    Cancel
+                  </Button>
+                  <Button 
+                    onClick={handleSubmit} 
+                    disabled={submitting}
+                    className="bg-blue-500 hover:bg-blue-600 text-white"
+                  >
+                    {submitting ? 'Saving...' : (editingClient ? 'Update Client' : 'Create Client')}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          {/* Search Bar */}
+          <div className="flex items-center gap-2">
+            <Input
+              placeholder="Search by client ID or name..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="max-w-md"
+            />
+            {searchQuery && (
+              <Badge variant="secondary">
+                {filteredClients.length} result{filteredClients.length !== 1 ? 's' : ''}
+              </Badge>
+            )}
+          </div>
         </div>
       </CardHeader>
 
@@ -519,7 +545,7 @@ export function ClientManagement() {
                 </tr>
               </thead>
               <tbody>
-                {clients.map((client) => (
+                {filteredClients.map((client) => (
                   <tr key={client.client_id} className="border-b border-gray-100 hover:bg-gray-50">
                     <td className="py-3 px-4 text-sm text-gray-900">{client.client_id}</td>
                     <td className="py-3 px-4 text-sm font-medium text-gray-900">{client.client_name}</td>
@@ -600,9 +626,15 @@ export function ClientManagement() {
               </tbody>
             </table>
             
-            {clients.length === 0 && (
+            {filteredClients.length === 0 && !searchQuery && (
               <div className="text-center py-8 text-gray-500">
                 No clients found. Add your first client to get started.
+              </div>
+            )}
+
+            {filteredClients.length === 0 && searchQuery && (
+              <div className="text-center py-8 text-gray-500">
+                No clients found matching "{searchQuery}"
               </div>
             )}
           </div>
