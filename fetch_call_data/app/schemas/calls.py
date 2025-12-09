@@ -64,7 +64,7 @@ class CallInDB(CallBase):
     timestamp: datetime = Field(..., description="Call timestamp")
     
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 
 class CallResponse(CallInDB):
