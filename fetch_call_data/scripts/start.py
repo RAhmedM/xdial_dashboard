@@ -44,8 +44,8 @@ def run_production():
         "--max-requests", "1000",
         "--max-requests-jitter", "50",
         "--preload",
-        "--access-logfile", "/root/xdial_dashboard/fetch_call_data/logs/access.log",
-        "--error-logfile", "/root/xdial_dashboard/fetch_call_data/logs/error.log",
+        "--access-logfile", "/var/www/xdial-dashboard/xdial_dashboard/fetch_call_data/logs/access.log",
+        "--error-logfile", "/var/www/xdial-dashboard/xdial_dashboard/fetch_call_data/logs/error.log",
         "--log-level", "info"
     ], check=True)
 
